@@ -1,103 +1,181 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+
+type Course = {
+  id: string;
+  name: string;
+  icon: string;
+  totalSteps: number;
+  completedSteps: number;
+  description?: string;
+  slug: string;
+};
+
+export default function Dashboard() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Fetch modules from Contentful
+    fetch("/api/modules")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch modules");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        console.log("[dashboard] modules response:", data);
+        const modules = data.modules || [];
+        
+        // Convert modules to course format with appropriate icons
+        const courseData = modules.map((module: any) => ({
+          id: module.id || module.slug,
+          name: module.title,
+          icon: getModuleIcon(module.title),
+          totalSteps: module.totalSteps || 0,
+          completedSteps: module.completedSteps || 0,
+          description: module.description || `Learn ${module.title} fundamentals`,
+          slug: module.slug
+        }));
+        
+        setCourses(courseData);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("[dashboard] Error fetching modules:", error);
+        setLoading(false);
+      });
+  }, []);
+
+  const getModuleIcon = (title: string) => {
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes('html')) return '5';
+    if (lowerTitle.includes('css')) return '3';
+    if (lowerTitle.includes('javascript') || lowerTitle.includes('js')) return 'JS';
+    if (lowerTitle.includes('react')) return '⚛';
+    if (lowerTitle.includes('python')) return '🐍';
+    if (lowerTitle.includes('database') || lowerTitle.includes('sql')) return '🗄';
+    if (lowerTitle.includes('node') || lowerTitle.includes('backend')) return 'JS';
+    return '📚'; // Default icon
+  };
+
+  const toggleExpanded = (courseId: string) => {
+    setExpandedCourse(expandedCourse === courseId ? null : courseId);
+  };
+
+  const getProgressPercentage = (completed: number, total: number) => {
+    return total > 0 ? Math.round((completed / total) * 100) : 0;
+  };
+
+  const getIconStyle = (icon: string) => {
+    if (icon === "5") {
+      return "bg-orange-100 text-orange-600 text-lg font-bold";
+    } else if (icon === "3") {
+      return "bg-blue-100 text-blue-600 text-lg font-bold";
+    } else if (icon === "JS") {
+      return "bg-yellow-100 text-yellow-800 text-sm font-bold";
+    } else if (icon === "⚛") {
+      return "bg-cyan-100 text-cyan-600 text-lg";
+    } else if (icon === "🐍") {
+      return "bg-green-100 text-green-600 text-lg";
+    } else if (icon === "🗄") {
+      return "bg-purple-100 text-purple-600 text-lg";
+    }
+    return "bg-gray-100 text-gray-600 text-lg";
+  };
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+    <div className="min-h-screen bg-white">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">Modules</h1>
+        
+        {loading ? (
+          <div className="flex justify-center items-center py-12">
+            <div className="text-gray-500">Loading modules...</div>
+          </div>
+        ) : courses.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-500 mb-4">No modules found</div>
+            <p className="text-sm text-gray-400">Make sure you have modules published in Contentful</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+          {courses.map((course) => {
+            const progress = getProgressPercentage(course.completedSteps, course.totalSteps);
+            const isExpanded = expandedCourse === course.id;
+            
+            return (
+              <div
+                key={course.id}
+                className="bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => toggleExpanded(course.id)}
+              >
+                <div className="flex items-center justify-between p-6">
+                  <div className="flex items-center space-x-4">
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${getIconStyle(course.icon)}`}>
+                      {course.icon}
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold text-gray-900">{course.name}</h2>
+                      <p className="text-sm text-gray-600">{course.description}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">
+                        {course.completedSteps} of {course.totalSteps} steps complete
+                      </p>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 transition-all duration-300"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{progress}%</span>
+                      </div>
+                    </div>
+                    
+                    <button className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                      {isExpanded ? (
+                        <ChevronUp className="h-5 w-5 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-gray-500" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                {isExpanded && (
+                  <div className="border-t border-gray-200 p-6 bg-gray-50">
+                    <div className="space-y-4">
+                      <p className="text-gray-700">{course.description}</p>
+                      <div className="flex space-x-4">
+                        <Link
+                          href={`/module/${course.slug}`}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Start Module
+                        </Link>
+                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
+                          View Progress
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
