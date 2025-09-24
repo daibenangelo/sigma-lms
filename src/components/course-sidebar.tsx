@@ -32,6 +32,7 @@ export function CourseSidebar() {
   const [courseName, setCourseName] = useState<string>("Course");
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(320);
+  const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
   const isResizingRef = useRef<boolean>(false);
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(320);
@@ -55,6 +56,38 @@ export function CourseSidebar() {
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, []);
+
+  // Load completed items from sessionStorage
+  useEffect(() => {
+    const stored = sessionStorage.getItem('completedItems');
+    if (stored) {
+      try {
+        const completed = JSON.parse(stored);
+        setCompletedItems(new Set(completed));
+      } catch (e) {
+        console.warn("[sidebar] Failed to parse completed items from sessionStorage:", e);
+      }
+    }
+  }, []);
+
+  // Track current page as completed
+  useEffect(() => {
+    const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
+    if (currentSlug) {
+      setCompletedItems(prevCompleted => {
+        if (!prevCompleted.has(currentSlug)) {
+          const newCompleted = new Set(prevCompleted);
+          newCompleted.add(currentSlug);
+          
+          // Save to sessionStorage
+          sessionStorage.setItem('completedItems', JSON.stringify([...newCompleted]));
+          
+          return newCompleted;
+        }
+        return prevCompleted;
+      });
+    }
+  }, [pathname]);
 
   useEffect(() => {
     // Determine course from current pathname, URL params, or stored context
@@ -194,65 +227,77 @@ export function CourseSidebar() {
 
               <CollapsibleContent>
                 <div className="px-4 pb-4">
-                  {content.length > 0 ? (
-                    <div className="space-y-1">
-                      {content.map((item, index) => {
-                        const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
-                        const isTutorial = item.type === 'tutorial';
-                        const isChallenge = item.type === 'challenge';
-                        const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/lesson/${item.slug}`;
-                        
-                        return (
-                          <Link
-                            key={`${item.type}-${item.slug}`}
-                            href={href}
-                            className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded"
-                          >
-                            {isQuiz ? (
-                              <HelpCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                            ) : isTutorial ? (
-                              <Wrench className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                            ) : isChallenge ? (
-                              <Swords className="h-4 w-4 text-rose-500 flex-shrink-0" />
-                            ) : (
-                              <Circle className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                            )}
-                            <Badge 
-                              variant="outline" 
-                              className={`text-xs px-2 py-1 ${
-                                isQuiz 
-                                  ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                                       : isTutorial
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                         : isChallenge
-                                         ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200'
-                              }`}
-                            >
-                              {index + 1}
-                            </Badge>
-                            <span className="text-sm text-gray-700 flex-1">
-                              {item.title}
-                            </span>
-                            {isQuiz && (
-                              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-600">
-                                Quiz
-                              </Badge>
-                            )}
-                            {isTutorial && (
-                              <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                                Tutorial
-                              </Badge>
-                            )}
-                            {isChallenge && (
-                              <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-700">
-                                Challenge
-                              </Badge>
-                            )}
-                          </Link>
-                        );
-                      })}
-                    </div>
+                         {content.length > 0 ? (
+                           <div className="space-y-1">
+                             {content.map((item, index) => {
+                               const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
+                               const isTutorial = item.type === 'tutorial';
+                               const isChallenge = item.type === 'challenge';
+                               // Get current course from sessionStorage or URL
+                               const currentCourse = sessionStorage.getItem('currentCourse') || 'html';
+                               const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : `/lesson/${item.slug}?course=${currentCourse}`;
+                               const isCompleted = completedItems.has(item.slug);
+
+                               const handleClick = (e: React.MouseEvent) => {
+                                 console.log(`[sidebar] Clicking on ${item.type}: ${item.title} -> ${href}`);
+                               };
+
+                               return (
+                                 <Link
+                                   key={`${item.type}-${item.slug}`}
+                                   href={href}
+                                   onClick={handleClick}
+                                   className={`flex items-center space-x-3 p-2 hover:bg-gray-50 rounded ${
+                                     isCompleted ? 'opacity-60' : ''
+                                   }`}
+                                 >
+                                   {isQuiz ? (
+                                     <HelpCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                                   ) : isTutorial ? (
+                                     <Wrench className="h-4 w-4 text-purple-500 flex-shrink-0" />
+                                   ) : isChallenge ? (
+                                     <Swords className="h-4 w-4 text-rose-500 flex-shrink-0" />
+                                   ) : (
+                                     <Circle className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                                   )}
+                                   <Badge 
+                                     variant="outline" 
+                                     className={`text-xs px-2 py-1 ${
+                                       isQuiz 
+                                         ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                              : isTutorial
+                                         ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                                : isChallenge
+                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                         : 'bg-gray-50 text-gray-700 border-gray-200'
+                                     }`}
+                                   >
+                                     {index + 1}
+                                   </Badge>
+                                   <span className={`text-sm text-gray-700 flex-1 ${
+                                     isCompleted ? 'line-through' : ''
+                                   }`}>
+                                     {item.title}
+                                   </span>
+                                   {isQuiz && (
+                                     <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-600">
+                                       Quiz
+                                     </Badge>
+                                   )}
+                                   {isTutorial && (
+                                     <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
+                                       Tutorial
+                                     </Badge>
+                                   )}
+                                   {isChallenge && (
+                                     <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-700">
+                                       Challenge
+                                     </Badge>
+                                   )}
+                                 </Link>
+                               );
+                             })}
+                           </div>
                   ) : (
                     <div className="text-sm text-gray-500 p-2">No content found.</div>
                   )}
