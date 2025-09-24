@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ type ContentItem = {
 };
 
 export function CourseSidebar() {
+  const pathname = usePathname();
   const [content, setContent] = useState<ContentItem[]>([]);
   const [courseName, setCourseName] = useState<string>("Course");
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
@@ -55,18 +57,64 @@ export function CourseSidebar() {
   }, []);
 
   useEffect(() => {
-    // Load content list from API (filter to HTML course)
-    fetch("/api/lessons?course=html")
-      .then(async (r) => {
-        const body = await r.json().catch(() => null);
-        if (!r.ok) {
-          console.error("[sidebar] /api/lessons error status:", r.status, body);
-          return null;
+    // Determine course from current pathname, URL params, or stored context
+    let course = "html"; // default
+    console.log("[sidebar] Current pathname:", pathname);
+    
+    // First check if course is in URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const courseParam = urlParams.get('course');
+    if (courseParam) {
+      course = courseParam;
+      sessionStorage.setItem('currentCourse', course);
+    } else if (pathname?.includes("/module/")) {
+      // Check if we're on a module page
+      const match = pathname.match(/\/module\/([^\/]+)/);
+      if (match) {
+        course = match[1];
+        // Store the course context for navigation
+        sessionStorage.setItem('currentCourse', course);
+      }
+    } else {
+      // Try to get course from session storage first
+      const storedCourse = sessionStorage.getItem('currentCourse');
+      if (storedCourse) {
+        course = storedCourse;
+      } else {
+        // Fallback: try to extract course from lesson slug by looking for common course patterns
+        const lessonMatch = pathname?.match(/\/lesson\/(.+)$/);
+        if (lessonMatch) {
+          const lessonSlug = lessonMatch[1];
+          // Try to extract course from slug by looking for common patterns
+          // This is a heuristic - in a real system, you'd want to store course info in the lesson data
+          const coursePatterns = ['html', 'css', 'javascript', 'react', 'python', 'java', 'sql', 'node', 'vue', 'angular'];
+          for (const pattern of coursePatterns) {
+            if (lessonSlug.includes(pattern)) {
+              course = pattern;
+              sessionStorage.setItem('currentCourse', course);
+              break;
+            }
+          }
         }
-        return body;
-      })
+      }
+    }
+    
+    console.log("[sidebar] Detected course:", course);
+    
+        // Load content list from API for detected course
+        console.log("[sidebar] Fetching content for course:", course);
+        fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
+          .then(async (r) => {
+            const body = await r.json().catch(() => null);
+            if (!r.ok) {
+              console.error("[sidebar] /api/lessons error status:", r.status, body);
+              return null;
+            }
+            return body;
+          })
       .then((data) => {
         console.log("[sidebar] /api/lessons response:", data);
+        console.log("[sidebar] Course requested:", course);
         if (!data) {
           setContent([]);
           return;
@@ -74,12 +122,22 @@ export function CourseSidebar() {
         // Keep nested order: chapter followed by its items
         const combined = Array.isArray(data.allContent) ? data.allContent : [];
         console.log("[sidebar] combined content:", combined);
+        console.log("[sidebar] Content count:", combined.length);
+        console.log("[sidebar] Content breakdown:", {
+          chapters: combined.filter(item => item.type === 'chapter').length,
+          quizzes: combined.filter(item => item.type === 'quiz').length,
+          tutorials: combined.filter(item => item.type === 'tutorial').length,
+          challenges: combined.filter(item => item.type === 'challenge').length
+        });
+        console.log("[sidebar] Full content structure:", combined.map(item => `${item.type}: ${item.title}`));
         setContent(combined);
         
-        // Extract course name from the first lesson or use a default
-        if (data.lessons && data.lessons.length > 0) {
-          // Try to get course name from lesson metadata or use a default
-          setCourseName("HTML Course");
+        // Extract course name from the course data or use a default
+        if (data.courseName) {
+          setCourseName(data.courseName);
+        } else if (data.lessons && data.lessons.length > 0) {
+          // Fallback: use course parameter with proper formatting
+          setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
         } else {
           setCourseName("Course");
         }
@@ -88,7 +146,7 @@ export function CourseSidebar() {
         console.error("[sidebar] /api/lessons fetch failed:", e);
         setContent([]);
       });
-  }, []);
+  }, [pathname]);
 
   const startResizing = (e: React.MouseEvent<HTMLDivElement>) => {
     isResizingRef.current = true;
@@ -142,7 +200,7 @@ export function CourseSidebar() {
                         const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
                         const isTutorial = item.type === 'tutorial';
                         const isChallenge = item.type === 'challenge';
-                        const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/chapter/${item.slug}`;
+                        const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/lesson/${item.slug}`;
                         
                         return (
                           <Link

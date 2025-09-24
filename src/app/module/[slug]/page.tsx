@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getEntriesByContentType } from "@/lib/contentful";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
@@ -56,16 +56,27 @@ export default async function CoursePage({ params }: Params) {
 
   // Filter chapters by selected course (heuristic by slug/title matching)
   const courseKey = (slug || "").toLowerCase();
+  console.log("[course] Filtering for course:", courseKey);
+  console.log("[course] Total lessons found:", allLessons.length);
+  
   const filteredLessons = allLessons.filter((lesson: any) => {
     const t = (lesson.fields?.title || "").toLowerCase();
     const s = (lesson.fields?.slug || "").toLowerCase();
+    console.log("[course] Checking lesson:", { title: t, slug: s });
+    
     if (courseKey === "html") {
       // HTML course: exclude CSS-only content
-      return !(t.includes("css") || s.includes("css"));
+      const isHtml = !(t.includes("css") || s.includes("css"));
+      console.log("[course] HTML filter result:", isHtml);
+      return isHtml;
     }
     // Other courses: include if title or slug mentions the course key
-    return t.includes(courseKey) || s.includes(courseKey);
+    const matches = t.includes(courseKey) || s.includes(courseKey);
+    console.log("[course] Other course filter result:", matches);
+    return matches;
   });
+  
+  console.log("[course] Filtered lessons count:", filteredLessons.length);
 
   // Build ordered content per chapter: Chapter → Quiz(es) → Tutorial(s) → Challenge(s)
   const allContent: Array<{ title: string; slug: string; type: 'chapter' | 'quiz' | 'tutorial' | 'challenge' }> = [];
@@ -97,6 +108,19 @@ export default async function CoursePage({ params }: Params) {
     });
   });
 
+    // Auto-redirect to first chapter if course is accessed directly
+    console.log("[course] All content:", allContent);
+    const firstChapter = allContent.find(item => item.type === 'chapter');
+    console.log("[course] First chapter found:", firstChapter);
+    
+    if (firstChapter) {
+      console.log("[course] Redirecting to:", `/lesson/${firstChapter.slug}`);
+      // Store the course context before redirecting
+      redirect(`/lesson/${firstChapter.slug}?course=${slug}`);
+    } else {
+      console.log("[course] No first chapter found, showing course overview");
+    }
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
@@ -121,7 +145,7 @@ export default async function CoursePage({ params }: Params) {
                const isQuiz = item.type === 'quiz';
                const isTutorial = item.type === 'tutorial';
                const isChallenge = item.type === 'challenge';
-               const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/chapter/${item.slug}`;
+               const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/lesson/${item.slug}`;
 
               return (
                 <Link

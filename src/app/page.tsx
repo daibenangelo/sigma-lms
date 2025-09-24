@@ -96,12 +96,12 @@ export default function CoursesPage() {
         
         {loading ? (
           <div className="flex justify-center items-center py-12">
-            <div className="text-gray-500">Loading modules...</div>
+            <div className="text-gray-500">Loading courses...</div>
           </div>
         ) : courses.length === 0 ? (
           <div className="text-center py-12">
-            <div className="text-gray-500 mb-4">No modules found</div>
-            <p className="text-sm text-gray-400">Make sure you have modules published in Contentful</p>
+            <div className="text-gray-500 mb-4">No courses found</div>
+            <p className="text-sm text-gray-400">Make sure you have courses published in Contentful</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -158,7 +158,7 @@ export default function CoursesPage() {
                       <p className="text-gray-700">{course.description}</p>
                       <div className="flex space-x-4">
                         <Link
-                          href={`/course/${course.slug}`}
+                          href={`/module/${course.slug}`}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                           Start Course

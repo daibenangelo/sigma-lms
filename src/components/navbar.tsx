@@ -38,10 +38,55 @@ export function Navbar() {
   const [meta, setMeta] = useState<LessonMeta | null>(null);
   const [content, setContent] = useState<ContentItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  const [courseName, setCourseName] = useState<string>("Course");
 
-    useEffect(() => {
-      // Load content list (HTML course only)
-      fetch("/api/lessons?course=html")
+  useEffect(() => {
+    // Determine course from current pathname, URL params, or stored context
+    let course = "html"; // default
+    console.log("[navbar] Current pathname:", pathname);
+    
+    // First check if course is in URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const courseParam = urlParams.get('course');
+    if (courseParam) {
+      course = courseParam;
+      sessionStorage.setItem('currentCourse', course);
+    } else if (pathname?.includes("/module/")) {
+      // Check if we're on a module page
+      const match = pathname.match(/\/module\/([^\/]+)/);
+      if (match) {
+        course = match[1];
+        // Store the course context for navigation
+        sessionStorage.setItem('currentCourse', course);
+      }
+    } else {
+      // Try to get course from session storage first
+      const storedCourse = sessionStorage.getItem('currentCourse');
+      if (storedCourse) {
+        course = storedCourse;
+      } else {
+        // Fallback: try to extract course from lesson slug by looking for common course patterns
+        const lessonMatch = pathname?.match(/\/lesson\/(.+)$/);
+        if (lessonMatch) {
+          const lessonSlug = lessonMatch[1];
+          // Try to extract course from slug by looking for common patterns
+          // This is a heuristic - in a real system, you'd want to store course info in the lesson data
+          const coursePatterns = ['html', 'css', 'javascript', 'react', 'python', 'java', 'sql', 'node', 'vue', 'angular'];
+          for (const pattern of coursePatterns) {
+            if (lessonSlug.includes(pattern)) {
+              course = pattern;
+              sessionStorage.setItem('currentCourse', course);
+              break;
+            }
+          }
+        }
+      }
+    }
+    
+    console.log("[navbar] Detected course:", course);
+    
+    // Load content list for the detected course
+    fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
       .then(async (r) => {
         const body = await r.json().catch(() => null);
         if (!r.ok) {
@@ -50,21 +95,26 @@ export function Navbar() {
         }
         return body;
       })
-      .then((data) => {
-        console.log("[navbar] /api/lessons response:", data);
-        if (!data) {
-          setContent([]);
-          return;
-        }
-          const combined = Array.isArray(data.allContent) ? data.allContent : [];
-        console.log("[navbar] combined content:", combined);
-        setContent(Array.isArray(combined) ? combined : []);
-      })
+             .then((data) => {
+               console.log("[navbar] /api/lessons response:", data);
+               if (!data) {
+                 setContent([]);
+                 return;
+               }
+               const combined = Array.isArray(data.allContent) ? data.allContent : [];
+               console.log("[navbar] combined content:", combined);
+               setContent(Array.isArray(combined) ? combined : []);
+               
+               // Set course name from API response
+               if (data.courseName) {
+                 setCourseName(data.courseName);
+               }
+             })
       .catch((e) => {
         console.error("[navbar] /api/lessons fetch failed:", e);
         setContent([]);
       });
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     const lessonMatch = pathname?.match(/^\/chapter\/(.+)$/) || pathname?.match(/^\/lesson\/(.+)$/);
@@ -95,14 +145,15 @@ export function Navbar() {
       setMeta({
         title: currentItem?.title || null,
         slug: currentItem?.slug || null,
-        course: 'HTML',
+        course: courseName,
         program: 'Software Development'
       });
     }
   }, [pathname, content]);
 
   const programLabel = meta?.program || "Software Development";
-  const courseLabel = meta?.course || "HTML";
+  const courseLabel = courseName; // Use dynamic course name from API
+  
   const lessonLabel = meta?.title || "Chapter";
 
   const navigateToContent = (direction: 'prev' | 'next') => {
@@ -123,7 +174,7 @@ export function Navbar() {
         ? `/tutorial/${item.slug}`
         : item.type === 'challenge'
         ? `/challenge/${item.slug}`
-        : `/chapter/${item.slug}`;
+        : `/lesson/${item.slug}`;
       router.push(href);
     }
   };
@@ -148,7 +199,13 @@ export function Navbar() {
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem>
-                <BreadcrumbLink href="/courses/html" className="text-gray-600 hover:text-gray-900">
+                <BreadcrumbLink href="/csdp/courses" className="text-gray-600 hover:text-gray-900">
+                  Courses
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem>
+                <BreadcrumbLink href={`/module/${pathname?.match(/\/module\/([^\/]+)/)?.[1] || "html"}`} className="text-gray-600 hover:text-gray-900">
                   {courseLabel}
                 </BreadcrumbLink>
               </BreadcrumbItem>
@@ -184,7 +241,7 @@ export function Navbar() {
                       const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
                       const isTutorial = item.type === 'tutorial';
                       const isChallenge = item.type === 'challenge';
-                      const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/chapter/${item.slug}`;
+                      const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/lesson/${item.slug}`;
                       
                       return (
                         <DropdownMenuItem
