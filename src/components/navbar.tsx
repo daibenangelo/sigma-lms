@@ -2,7 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,13 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  Trophy,
-  Globe,
-  FileText,
-  Video,
-  Edit,
-  Smartphone,
-  AlertTriangle,
   HelpCircle,
   Circle
 } from "lucide-react";
@@ -37,7 +29,7 @@ type LessonMeta = {
 type ContentItem = {
   title: string;
   slug: string;
-  type: 'lesson' | 'quiz' | 'module-quiz' | 'tutorial';
+  type: 'lesson' | 'quiz' | 'module-quiz' | 'tutorial' | 'challenge';
 };
 
 export function Navbar() {
@@ -47,9 +39,9 @@ export function Navbar() {
   const [content, setContent] = useState<ContentItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
 
-  useEffect(() => {
-    // Load content list
-    fetch("/api/lessons")
+    useEffect(() => {
+      // Load content list (HTML course only)
+      fetch("/api/lessons?course=html")
       .then(async (r) => {
         const body = await r.json().catch(() => null);
         if (!r.ok) {
@@ -64,11 +56,7 @@ export function Navbar() {
           setContent([]);
           return;
         }
-        const combined = data.allContent || [
-          ...(data.lessons || []),
-          ...(data.tutorials || []),
-          ...(data.quizzes || [])
-        ];
+          const combined = Array.isArray(data.allContent) ? data.allContent : [];
         console.log("[navbar] combined content:", combined);
         setContent(Array.isArray(combined) ? combined : []);
       })
@@ -79,9 +67,11 @@ export function Navbar() {
   }, []);
 
   useEffect(() => {
-    const lessonMatch = pathname?.match(/^\/lesson\/(.+)$/);
+    const lessonMatch = pathname?.match(/^\/chapter\/(.+)$/) || pathname?.match(/^\/lesson\/(.+)$/);
     const quizMatch = pathname?.match(/^\/quiz\/(.+)$/);
-    const slug = lessonMatch?.[1] || quizMatch?.[1];
+    const tutorialMatch = pathname?.match(/^\/tutorial\/(.+)$/);
+    const challengeMatch = pathname?.match(/^\/challenge\/(.+)$/);
+    const slug = lessonMatch?.[1] || quizMatch?.[1] || tutorialMatch?.[1] || challengeMatch?.[1];
     
     if (!slug) {
       setMeta(null);
@@ -93,14 +83,14 @@ export function Navbar() {
     const index = content.findIndex(item => item.slug === slug);
     setCurrentIndex(index);
 
-    // Only fetch lesson meta for lessons, not quizzes
+    // Only fetch chapter meta for chapter pages; others use content list
     if (lessonMatch) {
       fetch(`/api/lesson-meta?slug=${encodeURIComponent(slug)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => setMeta(data))
         .catch(() => setMeta(null));
     } else {
-      // For quizzes, set basic meta
+      // For quizzes/tutorials/challenges, set basic meta
       const currentItem = content.find(item => item.slug === slug);
       setMeta({
         title: currentItem?.title || null,
@@ -129,7 +119,11 @@ export function Navbar() {
       const item = content[newIndex];
       const href = item.type === 'quiz' || item.type === 'module-quiz' 
         ? `/quiz/${item.slug}` 
-        : `/lesson/${item.slug}`;
+        : item.type === 'tutorial'
+        ? `/tutorial/${item.slug}`
+        : item.type === 'challenge'
+        ? `/challenge/${item.slug}`
+        : `/chapter/${item.slug}`;
       router.push(href);
     }
   };
@@ -182,14 +176,15 @@ export function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="rounded-none border-r border-gray-300 px-4">
                   <Menu className="h-4 w-4 mr-2" />
-                  Module Outline
+                  Course Outline
                 </Button>
               </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-64 max-h-80 overflow-y-auto">
-                    {[...content].reverse().map((item, index) => {
+                          {content.map((item, index) => {
                       const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
                       const isTutorial = item.type === 'tutorial';
-                      const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : `/lesson/${item.slug}`;
+                      const isChallenge = item.type === 'challenge';
+                      const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/chapter/${item.slug}`;
                       
                       return (
                         <DropdownMenuItem
@@ -198,15 +193,18 @@ export function Navbar() {
                           className={`cursor-pointer ${index === currentIndex ? 'bg-blue-50 text-blue-700' : ''}`}
                         >
                           <div className="flex items-center space-x-2 w-full">
-                            <span className="text-xs text-gray-500 w-6">{index + 1}.</span>
                             <div className="flex items-center space-x-1 flex-1">
-                              {isQuiz ? (
-                                <HelpCircle className="h-3 w-3 text-orange-500 flex-shrink-0" />
-                              ) : isTutorial ? (
-                                <span className="inline-block h-3 w-3 bg-purple-500 rounded-sm" />
-                              ) : (
-                                <Circle className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                              )}
+                              <div className="w-5 flex items-center justify-center flex-shrink-0">
+                                {isQuiz ? (
+                                  <HelpCircle className="h-3 w-3 text-orange-500" />
+                                ) : isTutorial ? (
+                                  <span className="block h-3 w-3 bg-purple-500 rounded-full" />
+                                ) : isChallenge ? (
+                                  <span className="block h-3 w-3 bg-rose-500 rounded-full" />
+                                ) : (
+                                  <Circle className="h-3 w-3 text-gray-400" />
+                                )}
+                              </div>
                               <span className="truncate">{item.title}</span>
                             </div>
                             {isQuiz && (
@@ -214,6 +212,9 @@ export function Navbar() {
                             )}
                             {isTutorial && (
                               <span className="text-xs text-purple-700 bg-purple-100 px-1 rounded">Tutorial</span>
+                            )}
+                            {isChallenge && (
+                              <span className="text-xs text-rose-700 bg-rose-100 px-1 rounded">Challenge</span>
                             )}
                             {index === currentIndex && (
                               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -241,45 +242,6 @@ export function Navbar() {
           </div>
         </div>
 
-        {/* Right side - Utility Icons */}
-        <div className="flex items-center space-x-4">
-          {/* Daily XP */}
-          <div className="flex items-center space-x-2">
-            <Trophy className="h-5 w-5 text-yellow-500" />
-            <span className="text-sm font-medium">Daily XP</span>
-            <Badge variant="secondary" className="bg-pink-100 text-pink-600 rounded-full w-5 h-5 p-0 flex items-center justify-center text-xs">
-              0
-            </Badge>
-          </div>
-
-          {/* Language Selector */}
-          <div className="flex items-center space-x-1">
-            <Globe className="h-4 w-4 text-gray-600" />
-            <span className="text-sm font-medium">EN</span>
-          </div>
-
-          {/* Status Indicator */}
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-
-          {/* Action Icons */}
-          <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <FileText className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Video className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <Smartphone className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
-            </Button>
-          </div>
-        </div>
       </div>
     </header>
   );

@@ -14,7 +14,7 @@ type Course = {
   slug: string;
 };
 
-export default function Dashboard() {
+export default function CoursesPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedCourse, setExpandedCourse] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">Modules</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8 text-center">Courses</h1>
         
         {loading ? (
           <div className="flex justify-center items-center py-12">
@@ -158,10 +158,10 @@ export default function Dashboard() {
                       <p className="text-gray-700">{course.description}</p>
                       <div className="flex space-x-4">
                         <Link
-                          href={`/module/${course.slug}`}
+                          href={`/course/${course.slug}`}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
-                          Start Module
+                          Start Course
                         </Link>
                         <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors">
                           View Progress

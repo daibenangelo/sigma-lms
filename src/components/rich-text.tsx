@@ -134,7 +134,45 @@ export function RichText({ document }: Props) {
           }
         }
         
-        // Handle module entries that might contain quiz data
+        // Handle Chapter Quiz entries (moduleQuiz content type)
+        if (contentType === 'moduleQuiz') {
+          const chapterQuizData = node.data.target.fields;
+          console.log("Chapter Quiz data structure:", chapterQuizData);
+          
+          // Look for quiz data within the Chapter Quiz
+          if (chapterQuizData.quiz && Array.isArray(chapterQuizData.quiz)) {
+            // Filter out questions that are just links (not fully resolved)
+            const resolvedQuestions = chapterQuizData.quiz.filter((q: any) => q.fields && (q.fields.quesionText || q.fields.questionText));
+            
+            if (resolvedQuestions.length > 0) {
+              const questions = resolvedQuestions.map((q: any, index: number) => {
+                // Extract options and correct answer from linked Quiz Answer entries
+                const answers: any[] = Array.isArray(q.fields.answers) ? q.fields.answers : [];
+                const options = answers.map((ans: any) => richTextToPlainText(ans.fields?.answer));
+                const correctIndex = Math.max(0, answers.findIndex((ans: any) => ans.fields?.isCorrect === true));
+                const correctExp = answers[correctIndex]?.fields?.explanation;
+                const explanation = richTextToPlainText(correctExp);
+                
+                return {
+                  id: `q${index}`,
+                  question: q.fields.quesionText || q.fields.questionText || '',
+                  options,
+                  correctAnswer: correctIndex,
+                  explanation: explanation || ''
+                };
+              });
+              
+              return (
+                <Quiz 
+                  questions={questions} 
+                  title={chapterQuizData.title || 'Quiz'} 
+                />
+              );
+            }
+          }
+        }
+        
+        // Handle module entries that might contain quiz data (legacy support)
         if (contentType === 'module') {
           const moduleData = node.data.target.fields;
           

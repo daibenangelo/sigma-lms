@@ -1,13 +1,27 @@
 import { NextResponse } from "next/server";
 import { getEntriesByContentType, contentfulClient } from "@/lib/contentful";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    // Fetch lessons
+    const url = new URL(request.url);
+    const courseParam = (url.searchParams.get("course") || "").toLowerCase();
+
+    // Fetch lessons (chapters)
     const lessonItems = await getEntriesByContentType<{ title?: string; slug?: string; content?: any }>(
       "lesson",
       { limit: 1000, include: 10 }
     );
+
+    // Fetch Chapter Quizzes (moduleQuiz content type)
+    let chapterQuizItems: any[] = [];
+    try {
+      chapterQuizItems = await getEntriesByContentType<{ title?: string; slug?: string; quiz?: any[] }>(
+        "moduleQuiz",
+        { limit: 1000, include: 10 }
+      );
+    } catch (e) {
+      console.warn("[api/lessons] Chapter Quiz fetch failed (continuing):", e);
+    }
 
     // Fetch tutorials (tolerate missing content type, try common variants)
     let tutorialItems: any[] = [];
@@ -50,18 +64,32 @@ export async function GET() {
       }
     }
 
-    // Derive quizzes and tutorials from chapters (lessons) themselves
-    const lessonDerivedQuizzes: any[] = [];
+    // Process Chapter Quizzes (moduleQuiz content type)
+    const chapterQuizDerived: any[] = [];
+    console.log("[api/lessons] Chapter Quiz items found:", chapterQuizItems.length);
+    try {
+      chapterQuizItems.forEach((chapterQuiz: any, index: number) => {
+        console.log(`[api/lessons] Processing Chapter Quiz ${index}:`, chapterQuiz?.fields?.title);
+        const quizLinks = Array.isArray(chapterQuiz?.fields?.quiz) ? chapterQuiz.fields.quiz : [];
+        console.log(`[api/lessons] Quiz links in Chapter Quiz ${index}:`, quizLinks.length);
+        quizLinks.forEach((q: any, qIndex: number) => {
+          const title = q?.fields?.title;
+          const slug = q?.fields?.slug;
+          console.log(`[api/lessons] Quiz ${qIndex}: title="${title}", slug="${slug}"`);
+          if (title && slug) {
+            chapterQuizDerived.push({ title, slug, type: 'quiz' });
+          }
+        });
+      });
+      console.log("[api/lessons] Total quizzes derived:", chapterQuizDerived.length);
+    } catch (e) {
+      console.warn("[api/lessons] processing Chapter Quizzes failed (continuing):", e);
+    }
+
+    // Derive tutorials from chapters (lessons) themselves
     const lessonDerivedTutorials: any[] = [];
     try {
       lessonItems.forEach((lesson: any) => {
-        const quizLinks = Array.isArray(lesson?.fields?.lessonQuiz) ? lesson.fields.lessonQuiz : [];
-        quizLinks.forEach((q: any) => {
-          const title = q?.fields?.title;
-          const slug = q?.fields?.slug;
-          if (title && slug) lessonDerivedQuizzes.push({ title, slug, type: 'quiz' });
-        });
-
         const tutorialLinks = Array.isArray(lesson?.fields?.tutorial) ? lesson.fields.tutorial : [];
         tutorialLinks.forEach((t: any) => {
           const title = t?.fields?.topic || t?.fields?.title;
@@ -70,18 +98,40 @@ export async function GET() {
         });
       });
     } catch (e) {
-      console.warn("[api/lessons] deriving quizzes/tutorials from lessons failed (continuing):", e);
+      console.warn("[api/lessons] deriving tutorials from lessons failed (continuing):", e);
     }
 
-    // Build ordered content per chapter: Chapter → Tutorials → Quizzes
+    // Build ordered content per chapter: Chapter → Quiz(es) → Tutorial(s) → Challenge(s)
     const chapters: any[] = [];
     const perChapterContent: any[] = [];
     
-    // Sort lessons by slug to keep a consistent order
-    const sortedLessons = [...lessonItems].sort((a: any, b: any) => {
-      const as = (a.fields?.slug || "").toString();
-      const bs = (b.fields?.slug || "").toString();
-      return as.localeCompare(bs);
+    // Optional course-level filtering heuristic
+    const filteredLessons = [...lessonItems].filter((l: any) => {
+      if (!courseParam) return true;
+      const title = (l.fields?.title || "").toString().toLowerCase();
+      const slug = (l.fields?.slug || "").toString().toLowerCase();
+      // Heuristic: include when it matches the course keyword, exclude obvious others
+      if (courseParam === "html") {
+        // Exclude CSS-specific items
+        if (title.includes("css") || slug.includes("css")) return false;
+        return true;
+      }
+      return title.includes(courseParam) || slug.includes(courseParam);
+    });
+
+    // Sort lessons by the chapter number parsed from the title (Chapter N: ...)
+    const getChapterIndex = (title: string, slug: string) => {
+      const m = (title || '').match(/chapter\s*(\d+)/i);
+      if (m && m[1]) return parseInt(m[1], 10);
+      // fallback: try to extract number from slug if present
+      const ms = (slug || '').match(/(\d+)/);
+      return ms && ms[1] ? parseInt(ms[1], 10) : Number.MAX_SAFE_INTEGER;
+    };
+    const sortedLessons = filteredLessons.sort((a: any, b: any) => {
+      const ai = getChapterIndex(a.fields?.title || '', a.fields?.slug || '');
+      const bi = getChapterIndex(b.fields?.title || '', b.fields?.slug || '');
+      if (ai !== bi) return ai - bi;
+      return (a.fields?.title || '').localeCompare(b.fields?.title || '');
     });
 
     sortedLessons.forEach((lesson: any) => {
@@ -96,7 +146,17 @@ export async function GET() {
         type: 'chapter' as const,
       });
 
-      // Collect tutorials linked on this chapter
+      // Collect quizzes linked on this chapter (preferred source) – place directly below chapter
+      const quizLinks = Array.isArray(lesson?.fields?.lessonQuiz) ? lesson.fields.lessonQuiz : [];
+      quizLinks.forEach((q: any) => {
+        const title = q?.fields?.title;
+        const slug = q?.fields?.slug;
+        if (title && slug) {
+          perChapterContent.push({ title, slug, type: 'quiz' as const, chapterSlug });
+        }
+      });
+
+      // Then collect tutorials linked on this chapter (after quiz)
       const tutorialLinks = Array.isArray(lesson?.fields?.tutorial) ? lesson.fields.tutorial : [];
       tutorialLinks.forEach((t: any) => {
         const title = t?.fields?.topic || t?.fields?.title;
@@ -106,15 +166,17 @@ export async function GET() {
         }
       });
 
-      // Collect quizzes linked on this chapter
-      const quizLinks = Array.isArray(lesson?.fields?.lessonQuiz) ? lesson.fields.lessonQuiz : [];
-      quizLinks.forEach((q: any) => {
-        const title = q?.fields?.title;
-        const slug = q?.fields?.slug;
+      // Finally collect challenges linked on this chapter
+      const challengeLinks = Array.isArray(lesson?.fields?.challenge) ? lesson.fields.challenge : [];
+      challengeLinks.forEach((c: any) => {
+        const title = c?.fields?.title || c?.fields?.name;
+        const slug = c?.fields?.slug;
         if (title && slug) {
-          perChapterContent.push({ title, slug, type: 'quiz' as const, chapterSlug });
+          perChapterContent.push({ title, slug, type: 'challenge' as const, chapterSlug });
         }
       });
+
+      // Note: Chapter Quiz entries (moduleQuiz) are handled globally below if present
     });
 
     const tutorials = tutorialItems
@@ -123,9 +185,19 @@ export async function GET() {
         slug: item.fields?.slug || item.fields?.urlSlug,
         type: 'tutorial' as const
       }))
-      .filter((t) => t.title && t.slug);
-    // Use quizzes derived from lessons (do not include module-based quizzes)
-    const quizzes: any[] = [...lessonDerivedQuizzes];
+      .filter((t) => {
+        if (!t.title || !t.slug) return false;
+        if (!courseParam) return true;
+        const title = t.title.toLowerCase();
+        const slug = t.slug.toLowerCase();
+        if (courseParam === "html") {
+          if (title.includes("css") || slug.includes("css")) return false;
+          return true;
+        }
+        return title.includes(courseParam) || slug.includes(courseParam);
+      });
+    // Use quizzes derived from per-chapter links
+    const quizzes: any[] = perChapterContent.filter(i => i.type === 'quiz').map(({ title, slug }) => ({ title, slug, type: 'quiz' as const }));
 
     // Combine and sort all content
     // Build final ordered content: for each chapter, include its tutorial/quiz items
@@ -139,14 +211,24 @@ export async function GET() {
     const allContent: any[] = [];
     chapters.forEach((chapter) => {
       allContent.push(chapter);
-      const items = (chapterSlugToItems[chapter.slug] || []).sort((a, b) => a.slug.localeCompare(b.slug));
+      // Preserve the order of links as defined on the chapter (no sorting)
+      const items = (chapterSlugToItems[chapter.slug] || []);
       allContent.push(...items);
     });
 
+    const finalLessons = allContent.filter(item => item.type === 'chapter');
+    const finalTutorials = allContent.filter(item => item.type === 'tutorial');
+    const finalQuizzes = allContent.filter(item => item.type === 'quiz');
+    const finalChallenges = allContent.filter(item => item.type === 'challenge');
+    
+    console.log("[api/lessons] Final response - Lessons:", finalLessons.length, "Tutorials:", finalTutorials.length, "Quizzes:", finalQuizzes.length, "Challenges:", finalChallenges.length);
+    console.log("[api/lessons] Final quizzes:", finalQuizzes);
+    
     return NextResponse.json({ 
-      lessons: allContent.filter(item => item.type === 'chapter'),
-      tutorials: allContent.filter(item => item.type === 'tutorial'),
-      quizzes: allContent.filter(item => item.type === 'quiz'),
+      lessons: finalLessons,
+      tutorials: finalTutorials,
+      quizzes: finalQuizzes,
+      challenges: finalChallenges,
       allContent 
     });
   } catch (e: any) {

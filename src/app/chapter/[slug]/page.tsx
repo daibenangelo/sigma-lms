@@ -8,24 +8,25 @@ type Params = {
 
 export default async function ChapterPage({ params }: Params) {
   const { slug } = await params;
+
   const items = await getEntriesByContentType<{
     title?: string;
     slug?: string;
     content?: any;
   }>("lesson", { limit: 1, "fields.slug": slug, include: 10 });
 
-  const lesson = items[0];
-  if (!lesson) {
+  const chapter = items[0];
+  if (!chapter) {
     notFound();
   }
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-3xl font-bold mb-2">{(lesson.fields as any).title}</h1>
-      <p className="text-gray-600 mb-6">Software Development Programme · Course: Web Foundations</p>
-      {(lesson.fields as any).content && (
+      <h1 className="text-3xl font-bold mb-2">{(chapter.fields as any).title}</h1>
+      <p className="text-gray-600 mb-6">Software Development Programme · Course</p>
+      {(chapter.fields as any).content && (
         <div className="p-4 rounded-lg border border-gray-200 bg-white">
-          <RichText document={(lesson.fields as any).content} />
+          <RichText document={(chapter.fields as any).content} />
         </div>
       )}
     </div>

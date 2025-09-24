@@ -13,8 +13,10 @@ export function Shell({ children }: Props) {
   const isStandalonePage = pathname?.startsWith("/dashboard") || pathname?.startsWith("/profile");
   const isHomePage = pathname === "/";
   const isModulePage = pathname?.startsWith("/module/");
+  const isProgramsPage = pathname?.startsWith("/programs");
+  const isCoursesPage = pathname?.startsWith("/csdp/courses");
 
-  if (isStandalonePage || isHomePage || isModulePage) {
+  if (isStandalonePage || isHomePage || isModulePage || isProgramsPage || isCoursesPage) {
     return (
       <div className="min-h-screen bg-white">
         {children}
