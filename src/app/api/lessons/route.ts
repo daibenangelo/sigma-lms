@@ -189,7 +189,7 @@ export async function GET(request: Request) {
       const title = (l.fields?.title || "").toString().toLowerCase();
       const slug = (l.fields?.slug || "").toString().toLowerCase();
       
-      // For HTML course, include web development intro lessons too
+      // For HTML course, include web development intro lessons too.
       if (courseParam === "html") {
         return title.includes("html") || slug.includes("html") || 
                title.includes("web development") || slug.includes("web-development") ||
