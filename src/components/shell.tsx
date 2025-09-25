@@ -4,35 +4,39 @@ import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { CourseSidebar } from "@/components/course-sidebar";
 
-type Props = {
+interface ShellProps {
   children: React.ReactNode;
-};
+}
 
-export function Shell({ children }: Props) {
+export function Shell({ children }: ShellProps) {
   const pathname = usePathname();
-  const isStandalonePage = pathname?.startsWith("/dashboard") || pathname?.startsWith("/profile");
-  const isHomePage = pathname === "/";
-  const isCoursePage = pathname?.startsWith("/course/");
-  const isProgramsPage = pathname?.startsWith("/programs");
-  const isCoursesPage = pathname?.startsWith("/csdp/courses");
 
-  if (isStandalonePage || isHomePage || isCoursePage || isProgramsPage || isCoursesPage) {
-    return (
-      <div className="min-h-screen bg-white">
-        {children}
-      </div>
-    );
+  // Pages that should not show navbar and sidebar
+  const standalonePages = [
+    "/programs",
+    "/csdp/courses",
+    "/dashboard",
+    "/profile"
+  ];
+
+  // Check if current path is a course page (e.g., /course/html, /course/css)
+  const isCoursePage = pathname?.startsWith("/course/");
+
+  const isStandalonePage = standalonePages.some(page => pathname?.startsWith(page));
+
+  if (isStandalonePage || isCoursePage) {
+    return <>{children}</>;
   }
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
-      <CourseSidebar />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <Navbar />
-        <main className="flex-1 bg-gray-50 p-6 overflow-y-auto">{children}</main>
+    <div className="min-h-screen bg-gray-50">
+      <Navbar />
+      <div className="flex">
+        <CourseSidebar />
+        <main className="flex-1">
+          {children}
+        </main>
       </div>
     </div>
   );
 }
-
-

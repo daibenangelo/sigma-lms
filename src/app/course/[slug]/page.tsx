@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 type Params = {
   params: Promise<{ slug: string }>;
@@ -25,7 +25,11 @@ export default async function CoursePage({ params }: Params) {
   // Fetch content from the API endpoint that properly filters by course
   let apiData: ApiResponse | null = null;
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/lessons?course=${encodeURIComponent(slug)}`, {
+    // Use absolute URL for server-side fetch in production
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+    const response = await fetch(`${baseUrl}/api/lessons?course=${encodeURIComponent(slug)}`, {
       cache: 'no-store' // Ensure fresh data
     });
     
@@ -47,6 +51,14 @@ export default async function CoursePage({ params }: Params) {
   }
 
   const { allContent, courseName } = apiData;
+
+  // Auto-redirect to first chapter if available
+  const firstChapter = allContent.find(item => item.type === 'lesson');
+  if (firstChapter) {
+    console.log("[course] Redirecting to:", `/lesson/${firstChapter.slug}`);
+    // Store the course context before redirecting
+    redirect(`/lesson/${firstChapter.slug}?course=${slug}`);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
