@@ -103,10 +103,10 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
       <div className="fixed right-4 bottom-4 z-40">
         <Button
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg rounded-full p-3"
-          size="icon"
+          className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg rounded-lg px-4 py-2"
         >
-          <Code className="h-5 w-5" />
+          <Code className="h-4 w-4 mr-2" />
+          Start Challenge
         </Button>
       </div>
 

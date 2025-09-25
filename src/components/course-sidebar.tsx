@@ -78,10 +78,7 @@ export function CourseSidebar() {
         if (!prevCompleted.has(currentSlug)) {
           const newCompleted = new Set(prevCompleted);
           newCompleted.add(currentSlug);
-          
-          // Save to sessionStorage
           sessionStorage.setItem('completedItems', JSON.stringify([...newCompleted]));
-          
           return newCompleted;
         }
         return prevCompleted;
@@ -89,58 +86,29 @@ export function CourseSidebar() {
     }
   }, [pathname]);
 
-  // Robust course detection and content loading
-  useEffect(() => {
-    // Determine course from current pathname, URL params, or stored context
-    let course = "html"; // default
-    console.log("[sidebar] Current pathname:", pathname);
-    
-    // First check if course is in URL parameters
+  // Extract course from URL - with SSR safety
+  const getCurrentCourse = () => {
+    if (typeof window === 'undefined') return '';
     const urlParams = new URLSearchParams(window.location.search);
-    const courseParam = urlParams.get('course');
-    if (courseParam) {
-      course = courseParam;
-      sessionStorage.setItem('currentCourse', course);
-    } else if (pathname?.includes("/module/")) {
-      // Check if we're on a module page
-      const match = pathname.match(/\/module\/([^\/]+)/);
-      if (match) {
-        course = match[1];
-        sessionStorage.setItem('currentCourse', course);
-      }
-    } else {
-      // Try to get course from session storage first
-      const storedCourse = sessionStorage.getItem('currentCourse');
-      if (storedCourse) {
-        course = storedCourse;
-      } else {
-        // Fallback: try to extract course from lesson slug by looking for common course patterns
-        const lessonMatch = pathname?.match(/\/lesson\/(.+)$/);
-        if (lessonMatch) {
-          const lessonSlug = lessonMatch[1];
-          const coursePatterns = ['html', 'css', 'javascript', 'react', 'python', 'java', 'sql', 'node', 'vue', 'angular'];
-          for (const pattern of coursePatterns) {
-            if (lessonSlug.includes(pattern)) {
-              course = pattern;
-              sessionStorage.setItem('currentCourse', course);
-              break;
-            }
-          }
-        }
-      }
+    return urlParams.get('course') || '';
+  };
+
+  // Fetch content when pathname changes
+  useEffect(() => {
+    const course = getCurrentCourse();
+    if (!course) {
+      setContent([]);
+      setCourseName("Course");
+      return;
     }
-    
-    console.log("[sidebar] Detected course:", course);
-    
-    // Load content list from API for detected course
+
     fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
-      .then(async (r) => {
-        const body = await r.json().catch(() => null);
-        if (!r.ok) {
-          console.error("[sidebar] /api/lessons error status:", r.status, body);
+      .then(r => {
+        if (r.status !== 200) {
+          console.error("[sidebar] /api/lessons error status:", r.status);
           return null;
         }
-        return body;
+        return r.json();
       })
       .then((data) => {
         console.log("[sidebar] /api/lessons response:", data);
@@ -169,135 +137,120 @@ export function CourseSidebar() {
       });
   }, [pathname]);
 
-  const startResizing = (e: React.MouseEvent<HTMLDivElement>) => {
-    isResizingRef.current = true;
-    startXRef.current = e.clientX;
-    startWidthRef.current = sidebarWidth;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
+  const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
+  const currentCourse = getCurrentCourse();
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'lesson':
+        return <BookOpen className="h-4 w-4" />;
+      case 'tutorial':
+        return <HelpCircle className="h-4 w-4" />;
+      case 'quiz':
+        return <Circle className="h-4 w-4" />;
+      case 'challenge':
+        return <Swords className="h-4 w-4" />;
+      default:
+        return <Wrench className="h-4 w-4" />;
+    }
   };
 
-  const toggleExpanded = () => {
-    setIsExpanded(prev => !prev);
+  const getStatusIcon = (slug: string) => {
+    return completedItems.has(slug) ? (
+      <div className="w-2 h-2 bg-green-500 rounded-full" />
+    ) : (
+      <div className="w-2 h-2 bg-gray-300 rounded-full" />
+    );
   };
 
   return (
-    <div
-      className="relative bg-white border-r border-gray-200 h-screen overflow-y-auto select-none"
-      style={{ width: sidebarWidth }}
+    <div 
+      className="bg-white border-r border-gray-200 flex flex-col"
+      style={{ width: `${sidebarWidth}px` }}
     >
-          {/* Header */}
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-2xl font-bold text-center text-gray-900">Module Content</h2>
-          </div>
+      {/* Header */}
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900 truncate">{courseName}</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-8 w-8 p-0"
+          >
+            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
 
-          {/* Content List */}
-          <div className="border-b border-gray-200">
-            <Collapsible open={isExpanded} onOpenChange={toggleExpanded}>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-between p-4 h-auto hover:bg-gray-50 text-left"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                      <BookOpen className="h-4 w-4 text-white" />
-                    </div>
-                    <span className="font-semibold text-lg text-gray-900">{courseName}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm text-gray-600">
-                      {content.length} items
-                    </span>
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-gray-600" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-gray-600" />
-                    )}
-                  </div>
-                </Button>
-              </CollapsibleTrigger>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {isExpanded && (
+          <div className="p-4 space-y-2">
+            {content.map((item, index) => {
+              const isLesson = item.type === 'lesson';
+              const isTutorial = item.type === 'tutorial';
+              const isQuiz = item.type === 'quiz';
+              const isChallenge = item.type === 'challenge';
+              const isModuleQuiz = item.type === 'module-quiz';
+              
+              const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : 
+                          isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : 
+                          isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : 
+                          `/lesson/${item.slug}?course=${currentCourse}`;
 
-              <CollapsibleContent>
-                <div className="px-4 pb-4">
-                  {content.length > 0 ? (
-                    <div className="space-y-1">
-                       {content.map((item, index) => {
-                         const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
-                         const isTutorial = item.type === 'tutorial';
-                         const isChallenge = item.type === 'challenge';
-                         // Get current course from sessionStorage or URL
-                         const currentCourse = sessionStorage.getItem('currentCourse') || 'html';
-                         const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : `/lesson/${item.slug}?course=${currentCourse}`;
-                         const isCompleted = completedItems.has(item.slug);
-                         
-                         return (
-                           <Link
-                             key={`${item.type}-${item.slug}`}
-                             href={href}
-                             className={`flex items-center space-x-3 p-2 hover:bg-gray-50 rounded ${
-                               isCompleted ? 'opacity-60' : ''
-                             }`}
-                           >
-                            {isQuiz ? (
-                              <HelpCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                            ) : isTutorial ? (
-                              <Wrench className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                            ) : isChallenge ? (
-                              <Swords className="h-4 w-4 text-rose-500 flex-shrink-0" />
-                            ) : (
-                              <Circle className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                            )}
-                            <Badge 
-                              variant="outline" 
-                              className={`text-xs px-2 py-1 ${
-                                isQuiz 
-                                  ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                                       : isTutorial
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                         : isChallenge
-                                         ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                  : 'bg-gray-50 text-gray-700 border-gray-200'
-                              }`}
-                            >
-                              {index + 1}
-                            </Badge>
-                             <span className={`text-sm text-gray-700 flex-1 ${
-                               isCompleted ? 'line-through' : ''
-                             }`}>
-                               {item.title}
-                             </span>
-                            {isQuiz && (
-                              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-600">
-                                Quiz
-                              </Badge>
-                            )}
-                            {isTutorial && (
-                              <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                                Tutorial
-                              </Badge>
-                            )}
-                            {isChallenge && (
-                              <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-700">
-                                Challenge
-                              </Badge>
-                            )}
-                          </Link>
-                        );
-                      })}
+              const isActive = currentSlug === item.slug;
+              const isCompleted = completedItems.has(item.slug);
+
+              return (
+                <div key={index} className="space-y-1">
+                  <Link
+                    href={href}
+                    className={`flex items-center space-x-3 p-2 rounded-lg transition-colors ${
+                      isActive 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex-shrink-0">
+                      {getIcon(item.type)}
                     </div>
-                  ) : (
-                    <div className="text-sm text-gray-500 p-2">No content found.</div>
-                  )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.title}</p>
+                      <p className="text-xs text-gray-500">
+                        {isLesson ? 'Chapter' : 
+                         isTutorial ? 'Tutorial' : 
+                         isQuiz ? 'Quiz' : 
+                         isChallenge ? 'Challenge' : 
+                         'Content'}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {getStatusIcon(item.slug)}
+                      {isChallenge && (
+                        <Badge variant="destructive" className="text-xs">
+                          Challenge
+                        </Badge>
+                      )}
+                    </div>
+                  </Link>
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
+              );
+            })}
           </div>
+        )}
+      </div>
 
       {/* Resize handle */}
       <div
-        onMouseDown={startResizing}
-        className="absolute top-0 right-0 h-full w-1 cursor-col-resize hover:bg-gray-200 active:bg-gray-300"
+        className="w-1 bg-gray-200 hover:bg-gray-300 cursor-col-resize transition-colors"
+        onMouseDown={(e) => {
+          isResizingRef.current = true;
+          startXRef.current = e.clientX;
+          startWidthRef.current = sidebarWidth;
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
+        }}
       />
     </div>
   );

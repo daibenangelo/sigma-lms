@@ -12,11 +12,11 @@ export function Shell({ children }: Props) {
   const pathname = usePathname();
   const isStandalonePage = pathname?.startsWith("/dashboard") || pathname?.startsWith("/profile");
   const isHomePage = pathname === "/";
-  const isModulePage = pathname?.startsWith("/module/");
+  const isCoursePage = pathname?.startsWith("/course/");
   const isProgramsPage = pathname?.startsWith("/programs");
   const isCoursesPage = pathname?.startsWith("/csdp/courses");
 
-  if (isStandalonePage || isHomePage || isModulePage || isProgramsPage || isCoursesPage) {
+  if (isStandalonePage || isHomePage || isCoursePage || isProgramsPage || isCoursesPage) {
     return (
       <div className="min-h-screen bg-white">
         {children}

@@ -6,11 +6,72 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const courseParam = (url.searchParams.get("course") || "").toLowerCase();
 
-    // Fetch lessons (chapters)
-    const lessonItems = await getEntriesByContentType<{ title?: string; slug?: string; content?: any }>(
+    if (!courseParam) {
+      return NextResponse.json({ error: "Course parameter is required" }, { status: 400 });
+    }
+
+    // First, find the course by slug
+    let course = null;
+    try {
+      const courses = await getEntriesByContentType<{
+        title?: string;
+        slug?: string;
+        chapters?: any[];
+      }>("course", { limit: 1, "fields.slug": courseParam, include: 10 });
+      
+      if (courses.length === 0) {
+        return NextResponse.json({ error: "Course not found" }, { status: 404 });
+      }
+      
+      course = courses[0];
+    } catch (e) {
+      console.warn("[api/lessons] Course fetch failed:", e);
+      return NextResponse.json({ error: "Failed to fetch course" }, { status: 500 });
+    }
+
+    const courseName = (course.fields as any)?.title || courseParam;
+    const courseChapters = (course.fields as any)?.chapters || [];
+
+    console.log(`[api/lessons] Found course: ${courseName} with ${courseChapters.length} chapters`);
+
+    if (courseChapters.length === 0) {
+      return NextResponse.json({
+        lessons: [],
+        tutorials: [],
+        quizzes: [],
+        challenges: [],
+        allContent: [],
+        courseName
+      });
+    }
+
+    // Extract chapter IDs from the course
+    const chapterIds = courseChapters.map((chapter: any) => chapter.sys?.id).filter(Boolean);
+    
+    if (chapterIds.length === 0) {
+      return NextResponse.json({
+        lessons: [],
+        tutorials: [],
+        quizzes: [],
+        challenges: [],
+        allContent: [],
+        courseName
+      });
+    }
+
+    // Fetch all lessons and filter by the chapter IDs from the course
+    const allLessons = await getEntriesByContentType<{ title?: string; slug?: string; content?: any }>(
       "lesson",
       { limit: 1000, include: 10 }
     );
+
+    // Filter lessons to only include those that are linked to this course
+    const courseLessons = allLessons.filter((lesson: any) => {
+      const lessonId = lesson.sys?.id;
+      return chapterIds.includes(lessonId);
+    });
+
+    console.log(`[api/lessons] Found ${courseLessons.length} lessons for course ${courseParam}`);
 
     // Fetch Chapter Quizzes (moduleQuiz content type)
     let chapterQuizItems: any[] = [];
@@ -28,60 +89,35 @@ export async function GET(request: Request) {
     const tutorialTypeCandidates = [
       "lessonTutorial",
       "lesson-tutorial",
-      "lesson_tutorial",
-      "LessonTutorial",
       "tutorial",
       "Tutorial"
     ];
-    for (const typeId of tutorialTypeCandidates) {
+    
+    for (const type of tutorialTypeCandidates) {
       try {
-        const res = await getEntriesByContentType<{ title?: string; slug?: string; content?: any; body?: any }>(
-          typeId,
+        tutorialItems = await getEntriesByContentType<{ topic?: string; title?: string; slug?: string }>(
+          type,
           { limit: 1000, include: 10 }
         );
-        if (Array.isArray(res) && res.length > 0) {
-          tutorialItems = res;
-          break;
-        }
+        if (tutorialItems.length > 0) break;
       } catch (e) {
-        console.warn(`[api/lessons] '${typeId}' tutorials fetch failed (continuing):`, e);
-      }
-    }
-
-    // Broad fallback: scan all entries and pick those whose contentType id contains 'tutorial'
-    if (tutorialItems.length === 0) {
-      try {
-        const all = await contentfulClient.getEntries<any>({ limit: 1000, include: 2 });
-        const guess = all.items.filter((it: any) => {
-          const id = it?.sys?.contentType?.sys?.id || "";
-          return /tutorial/i.test(id);
-        });
-        if (guess.length > 0) {
-          tutorialItems = guess;
-        }
-      } catch (e) {
-        console.warn("[api/lessons] broad tutorial scan failed (continuing):", e);
+        console.warn(`[api/lessons] Tutorial type '${type}' failed (continuing):`, e);
       }
     }
 
     // Process Chapter Quizzes (moduleQuiz content type)
     const chapterQuizDerived: any[] = [];
-    console.log("[api/lessons] Chapter Quiz items found:", chapterQuizItems.length);
     try {
-      chapterQuizItems.forEach((chapterQuiz: any, index: number) => {
-        console.log(`[api/lessons] Processing Chapter Quiz ${index}:`, chapterQuiz?.fields?.title);
+      chapterQuizItems.forEach((chapterQuiz: any) => {
         const quizLinks = Array.isArray(chapterQuiz?.fields?.quiz) ? chapterQuiz.fields.quiz : [];
-        console.log(`[api/lessons] Quiz links in Chapter Quiz ${index}:`, quizLinks.length);
-        quizLinks.forEach((q: any, qIndex: number) => {
+        quizLinks.forEach((q: any) => {
           const title = q?.fields?.title;
           const slug = q?.fields?.slug;
-          console.log(`[api/lessons] Quiz ${qIndex}: title="${title}", slug="${slug}"`);
           if (title && slug) {
             chapterQuizDerived.push({ title, slug, type: 'quiz' });
           }
         });
       });
-      console.log("[api/lessons] Total quizzes derived:", chapterQuizDerived.length);
     } catch (e) {
       console.warn("[api/lessons] processing Chapter Quizzes failed (continuing):", e);
     }
@@ -89,7 +125,7 @@ export async function GET(request: Request) {
     // Derive tutorials from chapters (lessons) themselves
     const lessonDerivedTutorials: any[] = [];
     try {
-      lessonItems.forEach((lesson: any) => {
+      courseLessons.forEach((lesson: any) => {
         const tutorialLinks = Array.isArray(lesson?.fields?.tutorial) ? lesson.fields.tutorial : [];
         tutorialLinks.forEach((t: any) => {
           const title = t?.fields?.topic || t?.fields?.title;
@@ -98,27 +134,12 @@ export async function GET(request: Request) {
         });
       });
     } catch (e) {
-      console.warn("[api/lessons] deriving tutorials from lessons failed (continuing):", e);
+      console.warn("[api/lessons] processing lesson tutorials failed (continuing):", e);
     }
 
-    // Build ordered content per chapter: Chapter → Quiz(es) → Tutorial(s) → Challenge(s)
     const chapters: any[] = [];
     const perChapterContent: any[] = [];
     
-    // Optional course-level filtering heuristic
-    const filteredLessons = [...lessonItems].filter((l: any) => {
-      if (!courseParam) return true;
-      const title = (l.fields?.title || "").toString().toLowerCase();
-      const slug = (l.fields?.slug || "").toString().toLowerCase();
-      // Heuristic: include when it matches the course keyword, exclude obvious others
-      if (courseParam === "html") {
-        // Exclude CSS-specific items
-        if (title.includes("css") || slug.includes("css")) return false;
-        return true;
-      }
-      return title.includes(courseParam) || slug.includes(courseParam);
-    });
-
     // Sort lessons by the chapter number parsed from the title (Chapter N: ...)
     const getChapterIndex = (title: string, slug: string) => {
       const m = (title || '').match(/chapter\s*(\d+)/i);
@@ -127,26 +148,23 @@ export async function GET(request: Request) {
       const ms = (slug || '').match(/(\d+)/);
       return ms && ms[1] ? parseInt(ms[1], 10) : Number.MAX_SAFE_INTEGER;
     };
-    const sortedLessons = filteredLessons.sort((a: any, b: any) => {
-      const ai = getChapterIndex(a.fields?.title || '', a.fields?.slug || '');
-      const bi = getChapterIndex(b.fields?.title || '', b.fields?.slug || '');
-      if (ai !== bi) return ai - bi;
-      return (a.fields?.title || '').localeCompare(b.fields?.title || '');
+    
+    const sortedLessons = courseLessons.sort((a: any, b: any) => {
+      const aIndex = getChapterIndex(a.fields?.title || "", a.fields?.slug || "");
+      const bIndex = getChapterIndex(b.fields?.title || "", b.fields?.slug || "");
+      return aIndex - bIndex;
     });
 
+    // Build ordered content per chapter: Chapter → Quiz(es) → Tutorial(s) → Challenge(s)
     sortedLessons.forEach((lesson: any) => {
-      const chapterTitle = lesson.fields?.title;
-      const chapterSlug = lesson.fields?.slug;
-      if (!chapterTitle || !chapterSlug) return;
-
-      // Push the chapter item
-      chapters.push({
-        title: chapterTitle,
-        slug: chapterSlug,
-        type: 'chapter' as const,
-      });
-
-      // Collect quizzes linked on this chapter (preferred source) – place directly below chapter
+      const title = lesson.fields?.title || "";
+      const slug = lesson.fields?.slug || "";
+      const chapterSlug = slug;
+      
+      // Add the chapter itself
+      chapters.push({ title, slug, type: 'chapter' as const });
+      
+      // Collect quizzes linked on this chapter - use lessonQuiz field
       const quizLinks = Array.isArray(lesson?.fields?.lessonQuiz) ? lesson.fields.lessonQuiz : [];
       quizLinks.forEach((q: any) => {
         const title = q?.fields?.title;
@@ -156,7 +174,7 @@ export async function GET(request: Request) {
         }
       });
 
-      // Then collect tutorials linked on this chapter (after quiz)
+      // Collect tutorials linked on this chapter
       const tutorialLinks = Array.isArray(lesson?.fields?.tutorial) ? lesson.fields.tutorial : [];
       tutorialLinks.forEach((t: any) => {
         const title = t?.fields?.topic || t?.fields?.title;
@@ -166,7 +184,7 @@ export async function GET(request: Request) {
         }
       });
 
-      // Finally collect challenges linked on this chapter
+      // Collect challenges linked on this chapter
       const challengeLinks = Array.isArray(lesson?.fields?.challenge) ? lesson.fields.challenge : [];
       challengeLinks.forEach((c: any) => {
         const title = c?.fields?.title || c?.fields?.name;
@@ -175,8 +193,6 @@ export async function GET(request: Request) {
           perChapterContent.push({ title, slug, type: 'challenge' as const, chapterSlug });
         }
       });
-
-      // Note: Chapter Quiz entries (moduleQuiz) are handled globally below if present
     });
 
     const tutorials = tutorialItems
@@ -187,20 +203,17 @@ export async function GET(request: Request) {
       }))
       .filter((t) => {
         if (!t.title || !t.slug) return false;
-        if (!courseParam) return true;
-        const title = t.title.toLowerCase();
-        const slug = t.slug.toLowerCase();
-        if (courseParam === "html") {
-          if (title.includes("css") || slug.includes("css")) return false;
-          return true;
-        }
-        return title.includes(courseParam) || slug.includes(courseParam);
+        // Filter tutorials that are linked to course chapters
+        const isLinkedToCourse = perChapterContent.some(item => 
+          item.type === 'tutorial' && item.slug === t.slug
+        );
+        return isLinkedToCourse;
       });
+
     // Use quizzes derived from per-chapter links
     const quizzes: any[] = perChapterContent.filter(i => i.type === 'quiz').map(({ title, slug }) => ({ title, slug, type: 'quiz' as const }));
 
     // Combine and sort all content
-    // Build final ordered content: for each chapter, include its tutorial/quiz items
     const chapterSlugToItems = perChapterContent.reduce((acc: Record<string, any[]>, item: any) => {
       const key = item.chapterSlug;
       if (!acc[key]) acc[key] = [];
@@ -222,14 +235,14 @@ export async function GET(request: Request) {
     const finalChallenges = allContent.filter(item => item.type === 'challenge');
     
     console.log("[api/lessons] Final response - Lessons:", finalLessons.length, "Tutorials:", finalTutorials.length, "Quizzes:", finalQuizzes.length, "Challenges:", finalChallenges.length);
-    console.log("[api/lessons] Final quizzes:", finalQuizzes);
     
     return NextResponse.json({ 
       lessons: finalLessons,
       tutorials: finalTutorials,
       quizzes: finalQuizzes,
       challenges: finalChallenges,
-      allContent 
+      allContent,
+      courseName
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });

@@ -158,7 +158,7 @@ export default function CoursesPage() {
                       <p className="text-gray-700">{course.description}</p>
                       <div className="flex space-x-4">
                         <Link
-                          href={`/module/${course.slug}`}
+                          href={`/course/${course.slug}`}
                           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                           Start Course
