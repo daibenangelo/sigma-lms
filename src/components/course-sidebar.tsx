@@ -89,6 +89,7 @@ export function CourseSidebar() {
     }
   }, [pathname]);
 
+  // Robust course detection and content loading
   useEffect(() => {
     // Determine course from current pathname, URL params, or stored context
     let course = "html"; // default
@@ -105,7 +106,6 @@ export function CourseSidebar() {
       const match = pathname.match(/\/module\/([^\/]+)/);
       if (match) {
         course = match[1];
-        // Store the course context for navigation
         sessionStorage.setItem('currentCourse', course);
       }
     } else {
@@ -118,8 +118,6 @@ export function CourseSidebar() {
         const lessonMatch = pathname?.match(/\/lesson\/(.+)$/);
         if (lessonMatch) {
           const lessonSlug = lessonMatch[1];
-          // Try to extract course from slug by looking for common patterns
-          // This is a heuristic - in a real system, you'd want to store course info in the lesson data
           const coursePatterns = ['html', 'css', 'javascript', 'react', 'python', 'java', 'sql', 'node', 'vue', 'angular'];
           for (const pattern of coursePatterns) {
             if (lessonSlug.includes(pattern)) {
@@ -134,20 +132,18 @@ export function CourseSidebar() {
     
     console.log("[sidebar] Detected course:", course);
     
-        // Load content list from API for detected course
-        console.log("[sidebar] Fetching content for course:", course);
-        fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
-          .then(async (r) => {
-            const body = await r.json().catch(() => null);
-            if (!r.ok) {
-              console.error("[sidebar] /api/lessons error status:", r.status, body);
-              return null;
-            }
-            return body;
-          })
+    // Load content list from API for detected course
+    fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
+      .then(async (r) => {
+        const body = await r.json().catch(() => null);
+        if (!r.ok) {
+          console.error("[sidebar] /api/lessons error status:", r.status, body);
+          return null;
+        }
+        return body;
+      })
       .then((data) => {
         console.log("[sidebar] /api/lessons response:", data);
-        console.log("[sidebar] Course requested:", course);
         if (!data) {
           setContent([]);
           return;
@@ -155,14 +151,6 @@ export function CourseSidebar() {
         // Keep nested order: chapter followed by its items
         const combined = Array.isArray(data.allContent) ? data.allContent : [];
         console.log("[sidebar] combined content:", combined);
-        console.log("[sidebar] Content count:", combined.length);
-        console.log("[sidebar] Content breakdown:", {
-          chapters: combined.filter(item => item.type === 'chapter').length,
-          quizzes: combined.filter(item => item.type === 'quiz').length,
-          tutorials: combined.filter(item => item.type === 'tutorial').length,
-          challenges: combined.filter(item => item.type === 'challenge').length
-        });
-        console.log("[sidebar] Full content structure:", combined.map(item => `${item.type}: ${item.title}`));
         setContent(combined);
         
         // Extract course name from the course data or use a default
@@ -198,6 +186,11 @@ export function CourseSidebar() {
       className="relative bg-white border-r border-gray-200 h-screen overflow-y-auto select-none"
       style={{ width: sidebarWidth }}
     >
+          {/* Header */}
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-2xl font-bold text-center text-gray-900">Module Content</h2>
+          </div>
+
           {/* Content List */}
           <div className="border-b border-gray-200">
             <Collapsible open={isExpanded} onOpenChange={toggleExpanded}>
@@ -227,77 +220,72 @@ export function CourseSidebar() {
 
               <CollapsibleContent>
                 <div className="px-4 pb-4">
-                         {content.length > 0 ? (
-                           <div className="space-y-1">
-                             {content.map((item, index) => {
-                               const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
-                               const isTutorial = item.type === 'tutorial';
-                               const isChallenge = item.type === 'challenge';
-                               // Get current course from sessionStorage or URL
-                               const currentCourse = sessionStorage.getItem('currentCourse') || 'html';
-                               const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : `/lesson/${item.slug}?course=${currentCourse}`;
-                               const isCompleted = completedItems.has(item.slug);
-
-                               const handleClick = (e: React.MouseEvent) => {
-                                 console.log(`[sidebar] Clicking on ${item.type}: ${item.title} -> ${href}`);
-                               };
-
-                               return (
-                                 <Link
-                                   key={`${item.type}-${item.slug}`}
-                                   href={href}
-                                   onClick={handleClick}
-                                   className={`flex items-center space-x-3 p-2 hover:bg-gray-50 rounded ${
-                                     isCompleted ? 'opacity-60' : ''
-                                   }`}
-                                 >
-                                   {isQuiz ? (
-                                     <HelpCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                                   ) : isTutorial ? (
-                                     <Wrench className="h-4 w-4 text-purple-500 flex-shrink-0" />
-                                   ) : isChallenge ? (
-                                     <Swords className="h-4 w-4 text-rose-500 flex-shrink-0" />
-                                   ) : (
-                                     <Circle className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                                   )}
-                                   <Badge 
-                                     variant="outline" 
-                                     className={`text-xs px-2 py-1 ${
-                                       isQuiz 
-                                         ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                                              : isTutorial
-                                         ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                                : isChallenge
-                                                ? 'bg-rose-50 text-rose-700 border-rose-200'
-                                         : 'bg-gray-50 text-gray-700 border-gray-200'
-                                     }`}
-                                   >
-                                     {index + 1}
-                                   </Badge>
-                                   <span className={`text-sm text-gray-700 flex-1 ${
-                                     isCompleted ? 'line-through' : ''
-                                   }`}>
-                                     {item.title}
-                                   </span>
-                                   {isQuiz && (
-                                     <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-600">
-                                       Quiz
-                                     </Badge>
-                                   )}
-                                   {isTutorial && (
-                                     <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                                       Tutorial
-                                     </Badge>
-                                   )}
-                                   {isChallenge && (
-                                     <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-700">
-                                       Challenge
-                                     </Badge>
-                                   )}
-                                 </Link>
-                               );
-                             })}
-                           </div>
+                  {content.length > 0 ? (
+                    <div className="space-y-1">
+                       {content.map((item, index) => {
+                         const isQuiz = item.type === 'quiz' || item.type === 'module-quiz';
+                         const isTutorial = item.type === 'tutorial';
+                         const isChallenge = item.type === 'challenge';
+                         // Get current course from sessionStorage or URL
+                         const currentCourse = sessionStorage.getItem('currentCourse') || 'html';
+                         const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : `/lesson/${item.slug}?course=${currentCourse}`;
+                         const isCompleted = completedItems.has(item.slug);
+                         
+                         return (
+                           <Link
+                             key={`${item.type}-${item.slug}`}
+                             href={href}
+                             className={`flex items-center space-x-3 p-2 hover:bg-gray-50 rounded ${
+                               isCompleted ? 'opacity-60' : ''
+                             }`}
+                           >
+                            {isQuiz ? (
+                              <HelpCircle className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                            ) : isTutorial ? (
+                              <Wrench className="h-4 w-4 text-purple-500 flex-shrink-0" />
+                            ) : isChallenge ? (
+                              <Swords className="h-4 w-4 text-rose-500 flex-shrink-0" />
+                            ) : (
+                              <Circle className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            )}
+                            <Badge 
+                              variant="outline" 
+                              className={`text-xs px-2 py-1 ${
+                                isQuiz 
+                                  ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                       : isTutorial
+                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                         : isChallenge
+                                         ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                  : 'bg-gray-50 text-gray-700 border-gray-200'
+                              }`}
+                            >
+                              {index + 1}
+                            </Badge>
+                             <span className={`text-sm text-gray-700 flex-1 ${
+                               isCompleted ? 'line-through' : ''
+                             }`}>
+                               {item.title}
+                             </span>
+                            {isQuiz && (
+                              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-600">
+                                Quiz
+                              </Badge>
+                            )}
+                            {isTutorial && (
+                              <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700">
+                                Tutorial
+                              </Badge>
+                            )}
+                            {isChallenge && (
+                              <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-700">
+                                Challenge
+                              </Badge>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   ) : (
                     <div className="text-sm text-gray-500 p-2">No content found.</div>
                   )}

@@ -1,18 +1,19 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getEntriesByContentType } from "@/lib/contentful";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Circle, HelpCircle, Wrench, ArrowRight, Swords } from "lucide-react";
+import { Circle, HelpCircle, Wrench, Swords, ArrowRight } from "lucide-react";
 
 type Params = {
   params: { slug: string };
 };
 
-export default async function CoursePage({ params }: Params) {
+export default async function ModulePage({ params }: Params) {
   const { slug } = await params;
   
-  // Fetch course info and associated content
+  // Since HTML is a course, not a module, we'll fetch all content and filter by course
+  // For now, we'll assume all content belongs to the HTML course
   let courseTitle = "HTML";
   let courseDescription = "HTML Course";
   
@@ -44,82 +45,157 @@ export default async function CoursePage({ params }: Params) {
     console.warn("Could not fetch course info, using defaults:", e);
   }
 
-  // Fetch all chapters for building course content
+  // Fetch all lessons, tutorials, and quizzes for the course
   const allLessons = await getEntriesByContentType<{
     title?: string;
     slug?: string;
     content?: any;
-    tutorial?: any[];
-    lessonQuiz?: any[];
-    challenge?: any[];
   }>("lesson", { limit: 1000, include: 10 });
 
-  // Filter chapters by selected course (heuristic by slug/title matching)
-  const courseKey = (slug || "").toLowerCase();
-  console.log("[course] Filtering for course:", courseKey);
-  console.log("[course] Total lessons found:", allLessons.length);
-  
-  const filteredLessons = allLessons.filter((lesson: any) => {
-    const t = (lesson.fields?.title || "").toLowerCase();
-    const s = (lesson.fields?.slug || "").toLowerCase();
-    console.log("[course] Checking lesson:", { title: t, slug: s });
+  const allTutorials = await getEntriesByContentType<{
+    topic?: string;
+    slug?: string;
+    preview?: any;
+  }>("lessonTutorial", { limit: 1000, include: 10 });
+
+  // Fetch Chapter Quizzes (moduleQuiz content type)
+  let allChapterQuizzes: any[] = [];
+  try {
+    allChapterQuizzes = await getEntriesByContentType<{
+      title?: string;
+      slug?: string;
+      quiz?: any[];
+    }>("moduleQuiz", { limit: 1000, include: 10 });
+  } catch (e) {
+    console.warn("Could not fetch Chapter Quizzes:", e);
+  }
+
+  // Fetch Challenges
+  let allChallenges: any[] = [];
+  try {
+    allChallenges = await getEntriesByContentType<{
+      title?: string;
+      slug?: string;
+      preview?: any;
+    }>("lessonChallenge", { limit: 1000, include: 10 });
+  } catch (e) {
+    console.warn("Could not fetch Challenges:", e);
+  }
+
+  // Filter content by course
+  const courseLessons = allLessons.filter((lesson: any) => {
+    const title = (lesson.fields?.title || "").toString().toLowerCase();
+    const lessonSlug = (lesson.fields?.slug || "").toString().toLowerCase();
     
-    if (courseKey === "html") {
-      // HTML course: exclude CSS-only content
-      const isHtml = !(t.includes("css") || s.includes("css"));
-      console.log("[course] HTML filter result:", isHtml);
-      return isHtml;
+    // For HTML course, include web development intro lessons too
+    if (slug === "html") {
+      return title.includes("html") || lessonSlug.includes("html") || 
+             title.includes("web development") || lessonSlug.includes("web-development") ||
+             title.includes("introduction to web") || lessonSlug.includes("introduction-to-web");
     }
-    // Other courses: include if title or slug mentions the course key
-    const matches = t.includes(courseKey) || s.includes(courseKey);
-    console.log("[course] Other course filter result:", matches);
-    return matches;
+    
+    // For other courses, use generic filtering
+    return title.includes(slug) || lessonSlug.includes(slug);
+  });
+
+  const courseTutorials = allTutorials.filter((tutorial: any) => {
+    const title = (tutorial.fields?.topic || tutorial.fields?.title || "").toString().toLowerCase();
+    const tutorialSlug = (tutorial.fields?.slug || "").toString().toLowerCase();
+    
+    // For HTML course, include web development intro lessons too
+    if (slug === "html") {
+      return title.includes("html") || tutorialSlug.includes("html") || 
+             title.includes("web development") || tutorialSlug.includes("web-development") ||
+             title.includes("introduction to web") || tutorialSlug.includes("introduction-to-web");
+    }
+    
+    // For other courses, use generic filtering
+    return title.includes(slug) || tutorialSlug.includes(slug);
+  });
+
+  const courseChallenges = allChallenges.filter((challenge: any) => {
+    const title = (challenge.fields?.title || "").toString().toLowerCase();
+    const challengeSlug = (challenge.fields?.slug || "").toString().toLowerCase();
+    
+    // For HTML course, include web development intro lessons too
+    if (slug === "html") {
+      return title.includes("html") || challengeSlug.includes("html") || 
+             title.includes("web development") || challengeSlug.includes("web-development") ||
+             title.includes("introduction to web") || challengeSlug.includes("introduction-to-web");
+    }
+    
+    // For other courses, use generic filtering
+    return title.includes(slug) || challengeSlug.includes(slug);
   });
   
-  console.log("[course] Filtered lessons count:", filteredLessons.length);
-
-  // Build ordered content per chapter: Chapter → Quiz(es) → Tutorial(s) → Challenge(s)
-  const allContent: Array<{ title: string; slug: string; type: 'chapter' | 'quiz' | 'tutorial' | 'challenge' }> = [];
-  filteredLessons.forEach((lesson: any) => {
-    const chapterTitle = lesson.fields?.title;
-    const chapterSlug = lesson.fields?.slug;
-    if (!chapterTitle || !chapterSlug) return;
-    allContent.push({ title: chapterTitle, slug: chapterSlug, type: 'chapter' });
-
-    const quizLinks = Array.isArray(lesson.fields?.lessonQuiz) ? lesson.fields.lessonQuiz : [];
+  // Extract quizzes from Chapter Quiz entries and filter by course
+  const courseQuizzes: any[] = [];
+  allChapterQuizzes.forEach((chapterQuiz: any) => {
+    const quizLinks = Array.isArray(chapterQuiz?.fields?.quiz) ? chapterQuiz.fields.quiz : [];
     quizLinks.forEach((q: any) => {
       const title = q?.fields?.title;
-      const qslug = q?.fields?.slug;
-      if (title && qslug) allContent.push({ title, slug: qslug, type: 'quiz' });
-    });
-
-    const tutorialLinks = Array.isArray(lesson.fields?.tutorial) ? lesson.fields.tutorial : [];
-    tutorialLinks.forEach((t: any) => {
-      const title = t?.fields?.topic || t?.fields?.title;
-      const tslug = t?.fields?.slug;
-      if (title && tslug) allContent.push({ title, slug: tslug, type: 'tutorial' });
-    });
-
-    const challengeLinks = Array.isArray(lesson.fields?.challenge) ? lesson.fields.challenge : [];
-    challengeLinks.forEach((c: any) => {
-      const title = c?.fields?.title;
-      const cslug = c?.fields?.slug;
-      if (title && cslug) allContent.push({ title, slug: cslug, type: 'challenge' });
+      const quizSlug = q?.fields?.slug;
+      if (title && quizSlug) {
+        const titleLower = title.toLowerCase();
+        const slugLower = quizSlug.toLowerCase();
+        
+        // Filter by course
+        let shouldInclude = false;
+        if (slug === "html") {
+          shouldInclude = titleLower.includes("html") || slugLower.includes("html") || 
+                         titleLower.includes("web development") || slugLower.includes("web-development") ||
+                         titleLower.includes("introduction to web") || slugLower.includes("introduction-to-web");
+        } else {
+          shouldInclude = titleLower.includes(slug) || slugLower.includes(slug);
+        }
+        
+        if (shouldInclude) {
+          courseQuizzes.push({ title, slug: quizSlug, type: 'quiz' });
+        }
+      }
     });
   });
 
-    // Auto-redirect to first chapter if course is accessed directly
-    console.log("[course] All content:", allContent);
-    const firstChapter = allContent.find(item => item.type === 'chapter');
-    console.log("[course] First chapter found:", firstChapter);
-    
-    if (firstChapter) {
-      console.log("[course] Redirecting to:", `/lesson/${firstChapter.slug}`);
-      // Store the course context before redirecting
-      redirect(`/lesson/${firstChapter.slug}?course=${slug}`);
-    } else {
-      console.log("[course] No first chapter found, showing course overview");
+  // Combine all content for this course
+  const allContent = [
+    ...courseLessons.map(lesson => ({
+      title: (lesson.fields as any)?.title || '',
+      slug: (lesson.fields as any)?.slug || '',
+      type: 'lesson' as const
+    })),
+    ...courseTutorials.map(tutorial => ({
+      title: (tutorial.fields as any)?.topic || (tutorial.fields as any)?.title || '',
+      slug: (tutorial.fields as any)?.slug || '',
+      type: 'tutorial' as const
+    })),
+    ...courseChallenges.map(challenge => ({
+      title: (challenge.fields as any)?.title || '',
+      slug: (challenge.fields as any)?.slug || '',
+      type: 'challenge' as const
+    })),
+    ...courseQuizzes
+  ];
+
+  // Sort content by logical order (similar to sidebar logic)
+  const getContentIndex = (title: string, slug: string) => {
+    const patterns = [
+      /chapter\s*(\d+)/i, /lesson\s*(\d+)/i, /unit\s*(\d+)/i,
+      /part\s*(\d+)/i, /section\s*(\d+)/i, /module\s*(\d+)/i, /step\s*(\d+)/i
+    ];
+    for (const pattern of patterns) {
+      const m = (title || '').match(pattern);
+      if (m && m[1]) return parseInt(m[1], 10);
     }
+    const ms = (slug || '').match(/(\d+)/);
+    return ms && ms[1] ? parseInt(ms[1], 10) : Number.MAX_SAFE_INTEGER;
+  };
+  
+  const sortedContent = allContent.sort((a: any, b: any) => {
+    const ai = getContentIndex(a.title || '', a.slug || '');
+    const bi = getContentIndex(b.title || '', b.slug || '');
+    if (ai !== bi) return ai - bi;
+    return (a.title || '').localeCompare(b.title || '');
+  });
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -130,7 +206,7 @@ export default async function CoursePage({ params }: Params) {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
           <h2 className="text-lg font-semibold text-blue-900 mb-2">Course Overview</h2>
           <p className="text-blue-800">
-            This course contains {allContent.length} items including chapters, tutorials, and quizzes. 
+            This course contains {sortedContent.length} items including chapters, tutorials, quizzes, and challenges. 
             Complete them in order to master {courseTitle}.
           </p>
         </div>
@@ -139,13 +215,16 @@ export default async function CoursePage({ params }: Params) {
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Course Content</h2>
         
-        {allContent.length > 0 ? (
+        {sortedContent.length > 0 ? (
           <div className="space-y-2">
-             {allContent.map((item, index) => {
-               const isQuiz = item.type === 'quiz';
-               const isTutorial = item.type === 'tutorial';
-               const isChallenge = item.type === 'challenge';
-               const href = isQuiz ? `/quiz/${item.slug}` : isTutorial ? `/tutorial/${item.slug}` : isChallenge ? `/challenge/${item.slug}` : `/lesson/${item.slug}`;
+            {sortedContent.map((item, index) => {
+              const isQuiz = item.type === 'quiz';
+              const isTutorial = item.type === 'tutorial';
+              const isChallenge = item.type === 'challenge';
+              const href = isQuiz ? `/quiz/${item.slug}?course=${slug}` : 
+                          isTutorial ? `/tutorial/${item.slug}?course=${slug}` : 
+                          isChallenge ? `/challenge/${item.slug}?course=${slug}` : 
+                          `/lesson/${item.slug}?course=${slug}`;
 
               return (
                 <Link
@@ -165,9 +244,9 @@ export default async function CoursePage({ params }: Params) {
                       <HelpCircle className="h-5 w-5 text-orange-500 flex-shrink-0" />
                     ) : isTutorial ? (
                       <Wrench className="h-5 w-5 text-purple-500 flex-shrink-0" />
-                     ) : isChallenge ? (
-                       <Swords className="h-5 w-5 text-rose-500 flex-shrink-0" />
-                     ) : (
+                    ) : isChallenge ? (
+                      <Swords className="h-5 w-5 text-rose-500 flex-shrink-0" />
+                    ) : (
                       <Circle className="h-5 w-5 text-gray-400 flex-shrink-0" />
                     )}
                     
@@ -180,16 +259,16 @@ export default async function CoursePage({ params }: Params) {
                         Quiz
                       </Badge>
                     )}
-                     {isTutorial && (
+                    {isTutorial && (
                       <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-600">
                         Tutorial
                       </Badge>
                     )}
-                     {isChallenge && (
-                       <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-700">
-                         Challenge
-                       </Badge>
-                     )}
+                    {isChallenge && (
+                      <Badge variant="secondary" className="text-xs bg-rose-100 text-rose-600">
+                        Challenge
+                      </Badge>
+                    )}
                     <ArrowRight className="h-4 w-4 text-gray-400" />
                   </div>
                 </Link>
