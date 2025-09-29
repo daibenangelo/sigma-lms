@@ -29,11 +29,20 @@ export default async function CoursePage({ params }: Params) {
     const baseUrl = process.env.VERCEL_URL 
       ? `https://${process.env.VERCEL_URL}`
       : 'http://localhost:3000';
+    
+    console.log(`[course] Fetching from: ${baseUrl}/api/lessons?course=${encodeURIComponent(slug)}`);
+    
     const response = await fetch(`${baseUrl}/api/lessons?course=${encodeURIComponent(slug)}`, {
-      cache: 'no-store' // Ensure fresh data
+      cache: 'no-store', // Ensure fresh data
+      headers: {
+        'Content-Type': 'application/json',
+      }
     });
     
+    console.log(`[course] Response status: ${response.status}`);
+    
     if (!response.ok) {
+      console.error(`[course] API request failed with status: ${response.status}`);
       if (response.status === 404) {
         notFound();
       }
@@ -41,6 +50,7 @@ export default async function CoursePage({ params }: Params) {
     }
     
     apiData = await response.json();
+    console.log(`[course] Successfully fetched data for course: ${slug}`);
   } catch (e) {
     console.error("Failed to fetch course content:", e);
     notFound();

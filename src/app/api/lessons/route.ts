@@ -6,7 +6,10 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const courseParam = (url.searchParams.get("course") || "").toLowerCase();
 
+    console.log(`[api/lessons] Request for course: ${courseParam}`);
+
     if (!courseParam) {
+      console.log("[api/lessons] No course parameter provided");
       return NextResponse.json({ error: "Course parameter is required" }, { status: 400 });
     }
 

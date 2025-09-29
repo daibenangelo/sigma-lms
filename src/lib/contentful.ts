@@ -5,6 +5,14 @@ const environment = (process.env.CONTENTFUL_ENVIRONMENT || "master") as string;
 const accessToken = process.env.CONTENTFUL_DELIVERY_TOKEN as string;
 const previewToken = process.env.CONTENTFUL_PREVIEW_TOKEN as string | undefined;
 
+console.log("[contentful] Environment check:", {
+  hasSpace: !!space,
+  hasAccessToken: !!accessToken,
+  hasPreviewToken: !!previewToken,
+  environment,
+  spaceId: space?.substring(0, 8) + "..."
+});
+
 if (!space || !accessToken) {
   // Fail fast during server startup if required env vars are missing
   console.warn(

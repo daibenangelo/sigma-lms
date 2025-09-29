@@ -32,16 +32,24 @@ export function Navbar() {
   const [content, setContent] = useState<ContentItem[]>([]);
   const [courseName, setCourseName] = useState<string>("Course");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  // Handle hydration
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   // Extract course from URL - with SSR safety
   const getCurrentCourse = () => {
-    if (typeof window === 'undefined') return '';
+    if (!isClient) return '';
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('course') || '';
   };
 
   // Fetch content when pathname changes
   useEffect(() => {
+    if (!isClient) return;
+    
     const course = getCurrentCourse();
     if (!course) {
       setContent([]);
@@ -77,7 +85,7 @@ export function Navbar() {
         console.error("[navbar] /api/lessons fetch failed:", e);
         setContent([]);
       });
-  }, [pathname]);
+  }, [pathname, isClient]);
 
   const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
   const currentCourse = getCurrentCourse();
@@ -121,7 +129,7 @@ export function Navbar() {
             <Link href="/" className="text-xl font-bold text-gray-900">
               LMS
             </Link>
-            {currentCourse && (
+            {isClient && currentCourse && (
               <span className="ml-4 text-sm text-gray-500">
                 {courseName}
               </span>
@@ -130,7 +138,7 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            {content.length > 0 && (
+            {isClient && content.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="flex items-center space-x-2">
