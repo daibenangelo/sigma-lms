@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { CourseSidebar } from "@/components/course-sidebar";
+import { getCachedLessons } from "@/lib/server-cache";
 
 type Params = {
   params: Promise<{ slug: string }>;
@@ -26,18 +27,7 @@ export default async function ModulePage({ params }: Params) {
   // Fetch content from the API endpoint that properly filters by course
   let apiData: ApiResponse | null = null;
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/lessons?course=${encodeURIComponent(slug)}`, {
-      cache: 'no-store' // Ensure fresh data
-    });
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        notFound();
-      }
-      throw new Error(`API request failed: ${response.status}`);
-    }
-    
-    apiData = await response.json();
+    apiData = await getCachedLessons(slug);
   } catch (e) {
     console.error("Failed to fetch course content:", e);
     notFound();

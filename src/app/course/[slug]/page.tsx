@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { getCachedLessons } from "@/lib/server-cache";
 
 type Params = {
   params: Promise<{ slug: string }>;
@@ -25,32 +26,9 @@ export default async function CoursePage({ params }: Params) {
   // Fetch content from the API endpoint that properly filters by course
   let apiData: ApiResponse | null = null;
   try {
-    // Use absolute URL for server-side fetch in production
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
-    
-    console.log(`[course] Fetching from: ${baseUrl}/api/lessons?course=${encodeURIComponent(slug)}`);
-    
-    const response = await fetch(`${baseUrl}/api/lessons?course=${encodeURIComponent(slug)}`, {
-      cache: 'no-store', // Ensure fresh data
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    console.log(`[course] Response status: ${response.status}`);
-    
-    if (!response.ok) {
-      console.error(`[course] API request failed with status: ${response.status}`);
-      if (response.status === 404) {
-        notFound();
-      }
-      throw new Error(`API request failed: ${response.status}`);
-    }
-    
-    apiData = await response.json();
-    console.log(`[course] Successfully fetched data for course: ${slug}`);
+    console.log(`[course] Fetching cached data for course: ${slug}`);
+    apiData = await getCachedLessons(slug);
+    console.log(`[course] Successfully fetched cached data for course: ${slug}`);
   } catch (e) {
     console.error("Failed to fetch course content:", e);
     notFound();

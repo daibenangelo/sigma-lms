@@ -15,6 +15,8 @@ export function CodeEditor({ initialFiles = {}, course, challengeId }: CodeEdito
   const [files, setFiles] = useState<Record<string, string>>(initialFiles);
   const [activeFile, setActiveFile] = useState<string>("index.html");
   const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const editorRef = useRef<HTMLDivElement>(null);
   const monacoRef = useRef<any>(null);
 
@@ -79,6 +81,12 @@ document.addEventListener('DOMContentLoaded', function() {
           console.warn('Failed to load saved files:', e);
         }
       }
+      
+      // Load last save time
+      const timestamp = localStorage.getItem(`challenge-${challengeId}-timestamp`);
+      if (timestamp) {
+        setLastSaveTime(new Date(parseInt(timestamp)));
+      }
     }
   }, [challengeId]);
 
@@ -86,6 +94,9 @@ document.addEventListener('DOMContentLoaded', function() {
   const saveFiles = () => {
     if (challengeId) {
       localStorage.setItem(`challenge-${challengeId}`, JSON.stringify(files));
+      const currentTime = Date.now();
+      localStorage.setItem(`challenge-${challengeId}-timestamp`, currentTime.toString());
+      setLastSaveTime(new Date(currentTime));
     }
   };
 
@@ -95,6 +106,15 @@ document.addEventListener('DOMContentLoaded', function() {
       saveFiles();
     }
   }, [files, challengeId]);
+
+  // Timer to update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // Update every second
+
+    return () => clearInterval(timer);
+  }, []);
 
   // Initialize Monaco Editor
   useEffect(() => {
@@ -183,6 +203,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
+  // Format last save time
+  const getLastSaveText = () => {
+    if (!lastSaveTime) {
+      return 'Auto-saved';
+    }
+    
+    const diffMs = currentTime.getTime() - lastSaveTime.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      return `Saved ${diffDays}d ago`;
+    } else if (diffHours > 0) {
+      return `Saved ${diffHours}h ago`;
+    } else if (diffMinutes > 0) {
+      return `Saved ${diffMinutes}m ago`;
+    } else if (diffSeconds > 0) {
+      return `Saved ${diffSeconds}s ago`;
+    } else {
+      return 'Saved just now';
+    }
+  };
+
   if (!isOpen) {
     return (
       <div className="fixed right-4 bottom-4 z-40">
@@ -200,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
   return (
     <>
       {/* Bottom Drawer */}
-      <div className={`fixed bottom-0 left-0 right-0 h-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
+      <div className={`fixed bottom-0 left-0 right-0 h-[50vh] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
         isOpen ? 'translate-y-0' : 'translate-y-full'
       }`}>
         {/* Header */}
@@ -209,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <h3 className="font-semibold text-gray-900">Code Editor</h3>
             <div className="flex items-center gap-1 text-xs text-green-600">
               <Save className="h-3 w-3" />
-              <span>Auto-saved</span>
+              <span>{getLastSaveText()}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">

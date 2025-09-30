@@ -18,8 +18,11 @@ import {
   Swords,
   Menu,
   X,
-  ChevronDown
+  ChevronDown,
+  Activity
 } from "lucide-react";
+import { useApiCounter } from "@/contexts/api-counter-context";
+import { useLessonsFetch } from "@/hooks/use-cached-fetch";
 
 type ContentItem = {
   title: string;
@@ -33,6 +36,8 @@ export function Navbar() {
   const [courseName, setCourseName] = useState<string>("Course");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const { stats } = useApiCounter();
+  const { fetchLessons } = useLessonsFetch();
 
   // Handle hydration
   useEffect(() => {
@@ -57,14 +62,7 @@ export function Navbar() {
       return;
     }
 
-    fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
-      .then(r => {
-        if (r.status !== 200) {
-          console.error("[navbar] /api/lessons error status:", r.status);
-          return null;
-        }
-        return r.json();
-      })
+    fetchLessons(course)
       .then((data) => {
         if (!data) {
           setContent([]);
@@ -75,7 +73,7 @@ export function Navbar() {
         
         if (data.courseName) {
           setCourseName(data.courseName);
-        } else if (data.lessons && data.lessons.length > 0) {
+        } else if (data.allContent && data.allContent.length > 0) {
           setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
         } else {
           setCourseName("Course");
@@ -125,7 +123,7 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo/Brand */}
-          <div className="flex items-center">
+          <div className="flex items-center gap-4">
             <Link href="/" className="text-xl font-bold text-gray-900">
               LMS
             </Link>
@@ -134,6 +132,13 @@ export function Navbar() {
                 {courseName}
               </span>
             )}
+            {/* API Counter */}
+            <div className="hidden sm:flex items-center gap-2 ml-4 px-3 py-1 bg-blue-50 rounded-full border border-blue-200">
+              <Activity className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">
+                API Calls: {stats.totalCalls}
+              </span>
+            </div>
           </div>
 
           {/* Desktop Navigation */}
@@ -164,9 +169,7 @@ export function Navbar() {
                       <DropdownMenuItem key={index} asChild>
                         <Link
                           href={href}
-                          className={`flex items-center space-x-3 p-3 ${
-                            isActive ? 'bg-blue-50 text-blue-700' : ''
-                          }`}
+                          className="flex items-center space-x-3 p-3"
                         >
                           <div className="flex-shrink-0">
                             {getIcon(item.type)}
@@ -192,7 +195,14 @@ export function Navbar() {
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden">
+          <div className="md:hidden flex items-center gap-2">
+            {/* Mobile API Counter */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-full border border-blue-200">
+              <Activity className="h-3 w-3 text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">
+                {stats.totalCalls}
+              </span>
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -224,11 +234,7 @@ export function Navbar() {
                   <Link
                     key={index}
                     href={href}
-                    className={`flex items-center space-x-3 p-3 rounded-lg transition-colors ${
-                      isActive 
-                        ? 'bg-blue-100 text-blue-700' 
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
+                    className="flex items-center space-x-3 p-3 rounded-lg transition-colors"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     <div className="flex-shrink-0">

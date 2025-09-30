@@ -20,6 +20,8 @@ export function CodeMirrorEditor({
   const [isOpen, setIsOpen] = useState(false);
   const [code, setCode] = useState(initialCode);
   const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   // Load saved code from localStorage
@@ -29,6 +31,12 @@ export function CodeMirrorEditor({
       if (saved) {
         setCode(saved);
       }
+      
+      // Load last save time
+      const timestamp = localStorage.getItem(`challenge-${challengeId}-timestamp`);
+      if (timestamp) {
+        setLastSaveTime(new Date(parseInt(timestamp)));
+      }
     }
   }, [challengeId]);
 
@@ -36,6 +44,9 @@ export function CodeMirrorEditor({
   const saveCode = () => {
     if (challengeId) {
       localStorage.setItem(`challenge-${challengeId}`, code);
+      const currentTime = Date.now();
+      localStorage.setItem(`challenge-${challengeId}-timestamp`, currentTime.toString());
+      setLastSaveTime(new Date(currentTime));
     }
   };
 
@@ -46,6 +57,15 @@ export function CodeMirrorEditor({
     }
   }, [code, challengeId]);
 
+  // Timer to update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000); // Update every second
+
+    return () => clearInterval(timer);
+  }, []);
+
   // Generate preview URL
   useEffect(() => {
     if (isOpen && code) {
@@ -54,6 +74,31 @@ export function CodeMirrorEditor({
       setPreviewUrl(url);
     }
   }, [isOpen, code]);
+
+  // Format last save time
+  const getLastSaveText = () => {
+    if (!lastSaveTime) {
+      return 'Auto-saved';
+    }
+    
+    const diffMs = currentTime.getTime() - lastSaveTime.getTime();
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffDays > 0) {
+      return `Saved ${diffDays}d ago`;
+    } else if (diffHours > 0) {
+      return `Saved ${diffHours}h ago`;
+    } else if (diffMinutes > 0) {
+      return `Saved ${diffMinutes}m ago`;
+    } else if (diffSeconds > 0) {
+      return `Saved ${diffSeconds}s ago`;
+    } else {
+      return 'Saved just now';
+    }
+  };
 
   if (!isOpen) {
     return (
@@ -72,14 +117,14 @@ export function CodeMirrorEditor({
   return (
     <>
       {/* Bottom Drawer */}
-      <div className="fixed bottom-0 left-0 right-0 h-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50">
+      <div className="fixed bottom-0 left-0 right-0 h-[50vh] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50">
         {/* Header */}
         <div className="p-3 bg-gray-50 border-b flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h3 className="font-semibold text-gray-900">Code Editor</h3>
             <div className="flex items-center gap-1 text-xs text-green-600">
               <Save className="h-3 w-3" />
-              <span>Auto-saved</span>
+              <span>{getLastSaveText()}</span>
             </div>
           </div>
           <Button

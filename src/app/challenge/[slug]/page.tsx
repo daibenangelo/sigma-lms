@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { RichText } from "@/components/rich-text";
 import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 import { getEntriesByContentType } from "@/lib/contentful";
+import { getCachedLessons } from "@/lib/server-cache";
 
 type Params = {
   params: Promise<{ slug: string }>;
@@ -16,18 +17,7 @@ export default async function ChallengePage({ params }: Params) {
     // First, get the course from the URL or use a default
     const course = "html"; // You can make this dynamic based on URL params if needed
     
-    const response = await fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/lessons?course=${encodeURIComponent(course)}`, {
-      cache: 'no-store'
-    });
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        notFound();
-      }
-      throw new Error(`API request failed: ${response.status}`);
-    }
-    
-    const data = await response.json();
+    const data = await getCachedLessons(course);
     
     // Find the challenge in the allContent array
     const challenge = data.allContent?.find((item: any) => 

@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { CourseSidebar } from "@/components/course-sidebar";
+import { Providers } from "@/components/providers";
 
 interface ShellProps {
   children: React.ReactNode;
@@ -25,18 +26,20 @@ export function Shell({ children }: ShellProps) {
   const isStandalonePage = standalonePages.some(page => pathname?.startsWith(page));
 
   if (isStandalonePage || isCoursePage) {
-    return <>{children}</>;
+    return <Providers>{children}</Providers>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="flex">
-        <CourseSidebar />
-        <main className="flex-1">
-          {children}
-        </main>
+    <Providers>
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex">
+          <CourseSidebar />
+          <main className="flex-1">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </Providers>
   );
 }

@@ -27,8 +27,6 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
   const [projectId, setProjectId] = useState<string>('');
   const [vm, setVm] = useState<any>(null);
   const [isEmbedded, setIsEmbedded] = useState(false);
-  const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   // Extract StackBlitz URL from fullCodeSolution RichText field
   useEffect(() => {
@@ -115,23 +113,8 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
     if (typeof window !== 'undefined' && projectId) {
       const snapshot = localStorage.getItem(`stackblitz-snapshot-${projectId}`);
       setHasSnapshot(!!snapshot);
-      
-      // Load last save time
-      const timestamp = localStorage.getItem(`stackblitz-snapshot-${projectId}-timestamp`);
-      if (timestamp) {
-        setLastSaveTime(new Date(parseInt(timestamp)));
-      }
     }
   }, [projectId]);
-
-  // Timer to update current time every second
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000); // Update every second
-
-    return () => clearInterval(timer);
-  }, []);
 
   // Embed StackBlitz project when URL is available and panel is open
   useEffect(() => {
@@ -263,11 +246,9 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
       
       // Save to localStorage
       localStorage.setItem(`stackblitz-snapshot-${projectId}`, JSON.stringify(snapshot));
-      const currentTime = Date.now();
-      localStorage.setItem(`stackblitz-snapshot-${projectId}-timestamp`, currentTime.toString());
+      localStorage.setItem(`stackblitz-snapshot-${projectId}-timestamp`, Date.now().toString());
       
       setHasSnapshot(true);
-      setLastSaveTime(new Date(currentTime));
       setSaveStatus('saved');
       console.log('[StackBlitz] Snapshot saved to localStorage:', snapshot);
       
@@ -382,25 +363,6 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
       case 'error':
         return 'Error';
       default:
-        if (lastSaveTime) {
-          const diffMs = currentTime.getTime() - lastSaveTime.getTime();
-          const diffSeconds = Math.floor(diffMs / 1000);
-          const diffMinutes = Math.floor(diffMs / (1000 * 60));
-          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-          const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-          
-          if (diffDays > 0) {
-            return `Saved ${diffDays}d ago`;
-          } else if (diffHours > 0) {
-            return `Saved ${diffHours}h ago`;
-          } else if (diffMinutes > 0) {
-            return `Saved ${diffMinutes}m ago`;
-          } else if (diffSeconds > 0) {
-            return `Saved ${diffSeconds}s ago`;
-          } else {
-            return 'Saved just now';
-          }
-        }
         return 'Ready';
     }
   };
@@ -427,7 +389,7 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
       {/* Editor Panel */}
       {isOpen && (
         <div className="bg-white border-t border-gray-200 shadow-lg">
-          <div className="h-[50vh] flex flex-col">
+          <div className="h-96 flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import type { Document } from "@contentful/rich-text-types";
 import { BLOCKS, INLINES } from "@contentful/rich-text-types";
 

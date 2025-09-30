@@ -126,7 +126,7 @@ export function WebContainerEditor({ course, challengeId }: WebContainerEditorPr
   return (
     <>
       {/* Bottom Drawer */}
-      <div className="fixed bottom-0 left-0 right-0 h-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50">
+      <div className="fixed bottom-0 left-0 right-0 h-[50vh] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50">
         {/* Header */}
         <div className="p-3 bg-gray-50 border-b flex items-center justify-between">
           <div className="flex items-center gap-3">

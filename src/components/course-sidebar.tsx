@@ -19,6 +19,7 @@ import {
   Wrench,
   Swords
 } from "lucide-react";
+import { useLessonsFetch } from "@/hooks/use-cached-fetch";
 
 type ContentItem = {
   title: string;
@@ -36,6 +37,7 @@ export function CourseSidebar() {
   const isResizingRef = useRef<boolean>(false);
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(320);
+  const { fetchLessons } = useLessonsFetch();
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -102,14 +104,7 @@ export function CourseSidebar() {
       return;
     }
 
-    fetch(`/api/lessons?course=${encodeURIComponent(course)}`)
-      .then(r => {
-        if (r.status !== 200) {
-          console.error("[sidebar] /api/lessons error status:", r.status);
-          return null;
-        }
-        return r.json();
-      })
+    fetchLessons(course)
       .then((data) => {
         console.log("[sidebar] /api/lessons response:", data);
         if (!data) {
@@ -124,7 +119,7 @@ export function CourseSidebar() {
         // Extract course name from the course data or use a default
         if (data.courseName) {
           setCourseName(data.courseName);
-        } else if (data.lessons && data.lessons.length > 0) {
+        } else if (data.allContent && data.allContent.length > 0) {
           // Fallback: use course parameter with proper formatting
           setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
         } else {
