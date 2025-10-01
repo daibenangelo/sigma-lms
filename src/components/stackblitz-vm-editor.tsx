@@ -3,6 +3,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { X, Code, Save, RotateCcw, Download, Upload } from "lucide-react";
+import { useStackBlitzSupabaseSave } from "@/hooks/use-stackblitz-supabase-save";
+import { useAuth } from "@/contexts/auth-context";
+import { supabase } from "@/lib/supabase";
 
 interface StackBlitzVMEditorProps {
   projectUrl: string;
@@ -20,20 +23,33 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
     lastSaved?: string;
     fileCount?: number;
   }>({ hasSnapshot: false });
+  
+  const { user } = useAuth();
+  const { 
+    saveSnapshot, 
+    restoreSnapshot, 
+    hasSnapshot, 
+    getSnapshotMetadata, 
+    setupAutoSave 
+  } = useStackBlitzSupabaseSave({ 
+    projectId, 
+    vm,
+    lessonId: course // Using course as lessonId for now
+  });
 
   // Check for existing snapshot on mount
   useEffect(() => {
-    const checkSnapshot = () => {
+    const checkSnapshot = async () => {
+      if (!user) return;
+      
       try {
-        const snapshot = localStorage.getItem(`stackblitz-snapshot-${projectId}`);
-        const metadata = localStorage.getItem(`stackblitz-metadata-${projectId}`);
-        
-        if (snapshot && metadata) {
-          const metadataObj = JSON.parse(metadata);
+        const hasSnapshotData = await hasSnapshot();
+        if (hasSnapshotData) {
+          const metadata = await getSnapshotMetadata();
           setSnapshotStatus({
             hasSnapshot: true,
-            lastSaved: metadataObj.savedAt,
-            fileCount: metadataObj.fileCount
+            lastSaved: metadata?.savedAt || metadata?.updatedAt,
+            fileCount: metadata?.fileCount
           });
         }
       } catch (e) {
@@ -42,7 +58,7 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
     };
 
     checkSnapshot();
-  }, [projectId]);
+  }, [projectId, user, hasSnapshot, getSnapshotMetadata]);
 
   // Initialize StackBlitz VM
   const initializeVM = useCallback(async () => {
@@ -68,8 +84,11 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
 
       // Auto-restore snapshot if available
       if (snapshotStatus.hasSnapshot) {
-        await restoreSnapshot(vmInstance);
+        await handleRestoreSnapshot(vmInstance);
       }
+      
+      // Setup auto-save
+      setupAutoSave(vmInstance);
 
     } catch (error) {
       console.error('Failed to initialize StackBlitz VM:', error);
@@ -80,10 +99,21 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
 
   // Get initial files (either from snapshot or defaults)
   const getInitialFiles = async () => {
+    if (!user) return null;
+    
     try {
-      const snapshot = localStorage.getItem(`stackblitz-snapshot-${projectId}`);
-      if (snapshot) {
-        return JSON.parse(snapshot);
+      const hasSnapshotData = await hasSnapshot();
+      if (hasSnapshotData) {
+        const { data, error } = await supabase
+          .from('user_stackblitz_progress')
+          .select('files')
+          .eq('user_id', user.id)
+          .eq('project_id', projectId)
+          .single();
+        
+        if (!error && data) {
+          return data.files;
+        }
       }
     } catch (e) {
       console.warn('Failed to load snapshot, using defaults');
@@ -118,57 +148,43 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
   };
 
   // Save filesystem snapshot
-  const saveSnapshot = useCallback(async () => {
-    if (!vm) return;
+  const handleSaveSnapshot = useCallback(async () => {
+    if (!vm || !user) return;
 
     try {
-      const files = await vm.getFsSnapshot();
-      const serializedFiles = JSON.stringify(files);
-      
-      // Store snapshot
-      localStorage.setItem(`stackblitz-snapshot-${projectId}`, serializedFiles);
-      
-      // Store metadata
-      const metadata = {
-        savedAt: new Date().toISOString(),
-        projectId,
-        fileCount: Object.keys(files).length
-      };
-      localStorage.setItem(`stackblitz-metadata-${projectId}`, JSON.stringify(metadata));
-      
-      // Update status
-      setSnapshotStatus({
-        hasSnapshot: true,
-        lastSaved: metadata.savedAt,
-        fileCount: metadata.fileCount
-      });
-      
-      console.log(`[StackBlitz] Saved snapshot for project ${projectId}`);
+      const success = await saveSnapshot();
+      if (success) {
+        // Update status
+        const metadata = await getSnapshotMetadata();
+        setSnapshotStatus({
+          hasSnapshot: true,
+          lastSaved: metadata?.savedAt || metadata?.updatedAt,
+          fileCount: metadata?.fileCount
+        });
+        
+        console.log(`[StackBlitz] Saved snapshot for project ${projectId} to Supabase`);
+      }
     } catch (error) {
       console.error('Failed to save snapshot:', error);
     }
-  }, [vm, projectId]);
+  }, [vm, user, projectId, saveSnapshot, getSnapshotMetadata]);
 
   // Restore filesystem snapshot
-  const restoreSnapshot = useCallback(async (vmInstance?: any) => {
+  const handleRestoreSnapshot = useCallback(async (vmInstance?: any) => {
     const targetVM = vmInstance || vm;
-    if (!targetVM) return;
+    if (!targetVM || !user) return;
 
     try {
-      const serializedFiles = localStorage.getItem(`stackblitz-snapshot-${projectId}`);
-      if (!serializedFiles) {
-        console.log(`[StackBlitz] No snapshot found for project ${projectId}`);
-        return;
+      const success = await restoreSnapshot();
+      if (success) {
+        console.log(`[StackBlitz] Restored snapshot for project ${projectId} from Supabase`);
+      } else {
+        console.log(`[StackBlitz] No snapshot found for project ${projectId} in Supabase`);
       }
-
-      const files = JSON.parse(serializedFiles);
-      await targetVM.applyFsDiff({ create: files, destroy: [] });
-      
-      console.log(`[StackBlitz] Restored snapshot for project ${projectId}`);
     } catch (error) {
       console.error('Failed to restore snapshot:', error);
     }
-  }, [vm, projectId]);
+  }, [vm, user, projectId, restoreSnapshot]);
 
   // Download snapshot as JSON file
   const downloadSnapshot = useCallback(() => {
@@ -279,7 +295,7 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={saveSnapshot}
+              onClick={handleSaveSnapshot}
               variant="ghost"
               size="sm"
               className="h-6 px-2 text-xs"
@@ -290,7 +306,7 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
             </Button>
             {snapshotStatus.hasSnapshot && (
               <Button
-                onClick={() => restoreSnapshot()}
+                onClick={() => handleRestoreSnapshot()}
                 variant="ghost"
                 size="sm"
                 className="h-6 px-2 text-xs"
@@ -353,7 +369,7 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
             ) : vm ? (
               <div className="h-full">
                 <p className="text-sm text-gray-500 mb-4">
-                  StackBlitz VM is ready! Your changes will be automatically saved to localStorage.
+                  StackBlitz VM is ready! Your changes will be automatically saved to the cloud.
                 </p>
                 {snapshotStatus.hasSnapshot && (
                   <div className="bg-green-50 border border-green-200 rounded p-3 mb-4">
@@ -365,7 +381,7 @@ export function StackBlitzVMEditor({ projectUrl, projectId, course, className = 
                 <div className="bg-gray-50 border rounded p-4">
                   <p className="text-sm text-gray-600">
                     The StackBlitz VM is running. You can now interact with the embedded editor above.
-                    Use the Save button to persist your changes to localStorage.
+                    Use the Save button to persist your changes to the cloud.
                   </p>
                 </div>
               </div>
