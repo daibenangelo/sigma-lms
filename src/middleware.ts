@@ -9,7 +9,47 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/programs', request.url))
   }
 
-  // Handle any other middleware logic here if needed
+  // Public routes that don't require authentication
+  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
+  const isPublicRoute = publicRoutes.includes(pathname)
+
+  // Auth routes that should redirect if already logged in
+  const authRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password']
+  const isAuthRoute = authRoutes.includes(pathname)
+
+  // Check for Supabase session cookies (multiple possible names)
+  const supabaseAuthToken = request.cookies.get('sb-yvmjznglkccnrnnptjhq-auth-token')
+  const supabaseRefreshToken = request.cookies.get('sb-yvmjznglkccnrnnptjhq-auth-token.0')
+  const supabaseAccessToken = request.cookies.get('sb-yvmjznglkccnrnnptjhq-auth-token.1')
+  const supabaseSession = request.cookies.get('supabase-auth-token')
+  
+  const hasSession = !!(supabaseAuthToken || supabaseRefreshToken || supabaseAccessToken || supabaseSession)
+
+  console.log('Middleware:', { 
+    pathname, 
+    hasSession,
+    isPublicRoute,
+    isAuthRoute,
+    cookies: {
+      authToken: !!supabaseAuthToken,
+      refreshToken: !!supabaseRefreshToken,
+      accessToken: !!supabaseAccessToken,
+      session: !!supabaseSession
+    }
+  })
+
+  // Temporarily disable protection to test login
+  // if (!isPublicRoute && !hasSession) {
+  //   console.log('Redirecting to login - no session')
+  //   return NextResponse.redirect(new URL('/auth/login', request.url))
+  // }
+
+  // If accessing auth routes while logged in, redirect to programs
+  if (isAuthRoute && hasSession) {
+    console.log('Redirecting to programs - user is logged in')
+    return NextResponse.redirect(new URL('/programs', request.url))
+  }
+
   return NextResponse.next()
 }
 

@@ -19,10 +19,14 @@ import {
   Menu,
   X,
   ChevronDown,
-  Activity
+  Activity,
+  User,
+  LogOut,
+  LogIn
 } from "lucide-react";
 import { useApiCounter } from "@/contexts/api-counter-context";
 import { useLessonsFetch } from "@/hooks/use-cached-fetch";
+import { useAuth } from "@/contexts/auth-context";
 
 type ContentItem = {
   title: string;
@@ -38,6 +42,7 @@ export function Navbar() {
   const [isClient, setIsClient] = useState(false);
   const { stats } = useApiCounter();
   const { fetchLessons } = useLessonsFetch();
+  const { user, signOut } = useAuth();
 
   // Handle hydration
   useEffect(() => {
@@ -192,6 +197,55 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
+            {/* Auth Section */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center space-x-2">
+                    <User className="h-4 w-4" />
+                    <span>{user.user_metadata?.full_name || user.email}</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile" className="flex items-center space-x-2">
+                      <User className="h-4 w-4" />
+                      <span>Profile</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/dashboard" className="flex items-center space-x-2">
+                      <Activity className="h-4 w-4" />
+                      <span>Dashboard</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={async () => {
+                      await signOut()
+                      window.location.href = '/auth/login'
+                    }}
+                    className="flex items-center space-x-2 text-red-600"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Sign out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Button variant="ghost" asChild>
+                  <Link href="/auth/login" className="flex items-center space-x-2">
+                    <LogIn className="h-4 w-4" />
+                    <span>Sign in</span>
+                  </Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/auth/signup">Sign up</Link>
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -254,6 +308,63 @@ export function Navbar() {
                   </Link>
                 );
               })}
+
+              {/* Mobile Auth Section */}
+              <div className="border-t border-gray-200 pt-4 mt-4">
+                {user ? (
+                  <div className="space-y-2">
+                    <div className="px-3 py-2 text-sm text-gray-600">
+                      Signed in as {user.user_metadata?.full_name || user.email}
+                    </div>
+                    <Link
+                      href="/profile"
+                      className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <User className="h-4 w-4" />
+                      <span>Profile</span>
+                    </Link>
+                    <Link
+                      href="/dashboard"
+                      className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <Activity className="h-4 w-4" />
+                      <span>Dashboard</span>
+                    </Link>
+                    <button
+                      onClick={async () => {
+                        await signOut()
+                        setIsMobileMenuOpen(false)
+                        window.location.href = '/auth/login'
+                      }}
+                      className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-red-600 w-full text-left"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign out</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Link
+                      href="/auth/login"
+                      className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <LogIn className="h-4 w-4" />
+                      <span>Sign in</span>
+                    </Link>
+                    <Link
+                      href="/auth/signup"
+                      className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <User className="h-4 w-4" />
+                      <span>Sign up</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

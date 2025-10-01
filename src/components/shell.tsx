@@ -14,18 +14,26 @@ export function Shell({ children }: ShellProps) {
 
   // Pages that should not show navbar and sidebar
   const standalonePages = [
-    "/programs",
     "/csdp/courses",
     "/dashboard",
     "/profile"
+  ];
+
+  // Auth pages that should not show navbar and sidebar
+  const authPages = [
+    "/auth/login",
+    "/auth/signup",
+    "/auth/forgot-password",
+    "/auth/reset-password"
   ];
 
   // Check if current path is a course page (e.g., /course/html, /course/css)
   const isCoursePage = pathname?.startsWith("/course/");
 
   const isStandalonePage = standalonePages.some(page => pathname?.startsWith(page));
+  const isAuthPage = authPages.some(page => pathname?.startsWith(page));
 
-  if (isStandalonePage || isCoursePage) {
+  if (isStandalonePage || isCoursePage || isAuthPage) {
     return <Providers>{children}</Providers>;
   }
 
