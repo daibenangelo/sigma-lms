@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getEntriesByContentType, contentfulClient } from "@/lib/contentful";
+import { unstable_cache } from 'next/cache';
 
 export async function GET(request: Request) {
   try {

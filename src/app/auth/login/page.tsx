@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useAuth } from '@/contexts/auth-context'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { signIn } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,17 +22,14 @@ export default function LoginPage() {
 
     try {
       console.log('Attempting to sign in with:', email)
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      const { error } = await signIn(email, password)
       
       if (error) {
         console.error('Sign in error:', error)
         setError(error.message)
       } else {
         console.log('Sign in successful, redirecting to programs')
-        // Force a hard redirect to ensure clean navigation
+        // Simple redirect - no delays, no complexity
         window.location.href = '/programs'
       }
     } catch (err) {

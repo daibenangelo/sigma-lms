@@ -5,8 +5,7 @@
 };
 
 export type CourseFields = ContentfulBaseFields & {
-  level?: string;
-  durationMinutes?: number;
+  chapters?: any[]; // Array of linked entries
 };
 
 export type LessonFields = ContentfulBaseFields & {

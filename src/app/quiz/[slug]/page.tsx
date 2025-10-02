@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getEntriesByContentType } from "@/lib/contentful";
-import { Quiz } from "@/components/quiz";
+import { StrictQuiz } from "@/components/strict-quiz";
 
 // Helper function to convert rich text to plain text
 function richTextToPlainText(doc: any): string {
@@ -66,7 +66,7 @@ export default async function QuizPage({ params }: Params) {
       <h1 className="text-3xl font-bold mb-2">{title}</h1>
       <p className="text-gray-600 mb-6">Software Development Programme · Course</p>
       {questions.length > 0 ? (
-        <Quiz questions={questions} title={title} />
+        <StrictQuiz questions={questions} title={title} quizSlug={slug} />
       ) : (
         <div className="p-4 rounded-lg border border-gray-200 bg-white">
           <p className="text-gray-700">No quiz questions found.</p>

@@ -19,6 +19,11 @@ export function Shell({ children }: ShellProps) {
     "/profile"
   ];
 
+  // Pages that should show navbar but not sidebar
+  const navbarOnlyPages = [
+    "/programs"
+  ];
+
   // Auth pages that should not show navbar and sidebar
   const authPages = [
     "/auth/login",
@@ -31,10 +36,24 @@ export function Shell({ children }: ShellProps) {
   const isCoursePage = pathname?.startsWith("/course/");
 
   const isStandalonePage = standalonePages.some(page => pathname?.startsWith(page));
+  const isNavbarOnlyPage = navbarOnlyPages.some(page => pathname?.startsWith(page));
   const isAuthPage = authPages.some(page => pathname?.startsWith(page));
 
   if (isStandalonePage || isCoursePage || isAuthPage) {
     return <Providers>{children}</Providers>;
+  }
+
+  if (isNavbarOnlyPage) {
+    return (
+      <Providers>
+        <div className="min-h-screen bg-gray-50">
+          <Navbar />
+          <main className="flex-1">
+            {children}
+          </main>
+        </div>
+      </Providers>
+    );
   }
 
   return (

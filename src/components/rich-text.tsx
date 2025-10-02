@@ -3,7 +3,7 @@ import { documentToReactComponents } from "@contentful/rich-text-react-renderer"
 import type { Document } from "@contentful/rich-text-types";
 import { BLOCKS, MARKS, INLINES } from "@contentful/rich-text-types";
 import Image from "next/image";
-import { Quiz } from "./quiz";
+import { StrictQuiz } from "./strict-quiz";
 
 type Props = {
   document: Document;
@@ -126,7 +126,7 @@ export function RichText({ document }: Props) {
           
           if (questions.length > 0) {
             return (
-              <Quiz 
+              <StrictQuiz 
                 questions={questions} 
                 title={quizData.title || 'Quiz'} 
               />
@@ -163,7 +163,7 @@ export function RichText({ document }: Props) {
               });
               
               return (
-                <Quiz 
+                <StrictQuiz 
                   questions={questions} 
                   title={chapterQuizData.title || 'Quiz'} 
                 />
@@ -200,7 +200,7 @@ export function RichText({ document }: Props) {
               });
               
               return (
-                <Quiz 
+                <StrictQuiz 
                   questions={questions} 
                   title={moduleData.title || 'Quiz'} 
                 />

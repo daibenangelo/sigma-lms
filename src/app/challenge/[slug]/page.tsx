@@ -8,23 +8,29 @@ type Params = {
   params: Promise<{ slug: string }>;
 };
 
-export default async function ChallengePage({ params }: Params) {
+export default async function ChallengePage({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { slug } = await params;
+  const { course } = await searchParams;
   
   // Fetch challenge data from Contentful using the lessons API
   let challengeData: any = null;
   try {
-    // First, get the course from the URL or use a default
-    const course = "html"; // You can make this dynamic based on URL params if needed
+    // Get the course from URL params or use a default
+    const courseSlug = typeof course === 'string' ? course : 'html';
+    console.log('[challenge] Using course slug:', courseSlug, 'for challenge slug:', slug);
     
-    const data = await getCachedLessons(course);
+    const data = await getCachedLessons(courseSlug);
     
     // Find the challenge in the allContent array
     const challenge = data.allContent?.find((item: any) => 
       item.slug === slug && item.type === 'challenge'
     );
     
+    console.log('[challenge] Found challenge:', challenge?.title, 'in course:', courseSlug);
+    console.log('[challenge] Available challenges:', data.allContent?.filter((item: any) => item.type === 'challenge').map((item: any) => item.slug));
+    
     if (!challenge) {
+      console.error('[challenge] Challenge not found for slug:', slug);
       notFound();
     }
     
@@ -112,43 +118,56 @@ export default async function ChallengePage({ params }: Params) {
       <p className="text-gray-600 mb-6">Software Development Programme · Challenge</p>
       
       {/* Preview Section */}
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900">Preview</h2>
-        <div className="p-6 rounded-lg border border-blue-200 bg-blue-50">
-          <p>This is a preview of the {fields.title} challenge. You'll be building a practical project to demonstrate your skills.</p>
-        </div>
-      </section>
+      {fields.preview && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Preview</h2>
+          <div className="p-6 rounded-lg border border-blue-200 bg-blue-50">
+            <RichText document={fields.preview} />
+          </div>
+        </section>
+      )}
 
       {/* Content Section */}
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900">Instructions</h2>
-        <div className="p-6 rounded-lg border border-gray-200 bg-white">
-          <p>In this challenge, you'll create a {fields.title.toLowerCase()}. Follow the instructions below to complete the project.</p>
-        </div>
-      </section>
+      {fields.content && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Instructions</h2>
+          <div className="p-6 rounded-lg border border-gray-200 bg-white">
+            <RichText document={fields.content} />
+          </div>
+        </section>
+      )}
 
       {/* Test Section */}
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900">Test</h2>
-        <div className="p-6 rounded-lg border border-orange-200 bg-orange-50">
-          <p>Your project will be tested to ensure it meets the requirements. Make sure to follow all the specifications.</p>
-        </div>
-      </section>
+      {fields.test && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Test</h2>
+          <div className="p-6 rounded-lg border border-orange-200 bg-orange-50">
+            <RichText document={fields.test} />
+          </div>
+        </section>
+      )}
 
-      {/* Test Example Section */}
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900">Test Example</h2>
-        <div className="p-6 rounded-lg border border-blue-200 bg-blue-50">
-          <p>Here is an example of what your completed project should look like. Use this as a reference for your implementation.</p>
-        </div>
-      </section>
+      {/* Test JS Section */}
+      {fields.testJS && (
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Test (JavaScript)</h2>
+          <div className="p-6 rounded-lg border border-purple-200 bg-purple-50">
+            <RichText document={fields.testJS} />
+          </div>
+        </section>
+      )}
 
-      {/* StackBlitz Toggleable Code Editor */}
+      {/* Full Code Solution Section */}
       {fields.fullCodeSolution && (
-        <StackBlitzToggle 
-          document={fields.fullCodeSolution} 
-          className="mb-6"
-        />
+        <section className="mb-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Full Code Solution</h2>
+          <div className="p-6 rounded-lg border border-green-200 bg-green-50">
+            <StackBlitzToggle 
+              document={fields.fullCodeSolution} 
+              className="mb-6"
+            />
+          </div>
+        </section>
       )}
     </div>
   );

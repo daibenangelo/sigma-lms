@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getEntriesByContentType } from "@/lib/contentful";
 import { RichText } from "@/components/rich-text";
+import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -56,6 +57,12 @@ export default async function TutorialPage({ params }: Params) {
           <RichText document={sectionStarter} />
         </div>
       )}
+
+      {/* Code Editor - Same as Challenges */}
+      <StackBlitzToggle 
+        document={sectionStarter} 
+        className="mb-6"
+      />
 
       {sectionInstructions.length > 0 && (
         <div className="p-4 rounded-lg border border-gray-200 bg-white mb-6">

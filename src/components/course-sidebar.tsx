@@ -20,6 +20,7 @@ import {
   Swords
 } from "lucide-react";
 import { useLessonsFetch } from "@/hooks/use-cached-fetch";
+import { useCourseProgress } from "@/hooks/use-course-progress";
 
 type ContentItem = {
   title: string;
@@ -38,6 +39,45 @@ export function CourseSidebar() {
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(320);
   const { fetchLessons } = useLessonsFetch();
+  
+  // Get current course from URL
+  const getCurrentCourse = () => {
+    if (typeof window === 'undefined') return '';
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('course') || '';
+  };
+  
+  const currentCourse = getCurrentCourse();
+  console.log("[sidebar] Current course:", currentCourse);
+  
+  const { 
+    progress, 
+    markItemCompleted, 
+    isItemCompleted, 
+    saveProgress 
+  } = useCourseProgress(currentCourse);
+
+  // Calculate progress - prioritize database progress, use sessionStorage as fallback
+  const dbCompletedCount = progress?.completed_items?.length || 0;
+  const sessionCompletedCount = completedItems.size;
+  
+  // Use database progress if available, otherwise use sessionStorage
+  const completedCount = dbCompletedCount > 0 ? dbCompletedCount : sessionCompletedCount;
+  
+  // Use the actual content length as total count
+  const totalCount = content.length;
+  const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  
+  console.log("[sidebar] Progress calculation:", {
+    currentCourse,
+    dbCompletedCount,
+    sessionCompletedCount,
+    completedCount,
+    totalCount,
+    progressPercentage,
+    contentLength: content.length,
+    usingDatabase: dbCompletedCount > 0
+  });
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -59,41 +99,51 @@ export function CourseSidebar() {
     };
   }, []);
 
-  // Load completed items from sessionStorage
+  // Load completed items from sessionStorage for current course
   useEffect(() => {
-    const stored = sessionStorage.getItem('completedItems');
+    if (!currentCourse) {
+      setCompletedItems(new Set());
+      return;
+    }
+    
+    const storageKey = `completedItems_${currentCourse}`;
+    const stored = sessionStorage.getItem(storageKey);
     if (stored) {
       try {
         const completed = JSON.parse(stored);
         setCompletedItems(new Set(completed));
+        console.log(`[sidebar] Loaded completed items for course ${currentCourse}:`, completed);
       } catch (e) {
-        console.warn("[sidebar] Failed to parse completed items from sessionStorage:", e);
+        console.warn(`[sidebar] Failed to parse completed items for course ${currentCourse}:`, e);
+        setCompletedItems(new Set());
       }
+    } else {
+      setCompletedItems(new Set());
     }
-  }, []);
+  }, [currentCourse]);
 
   // Track current page as completed
   useEffect(() => {
     const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
-    if (currentSlug) {
+    if (currentSlug && totalCount > 0 && currentCourse) {
+      // Update sessionStorage for current course
       setCompletedItems(prevCompleted => {
         if (!prevCompleted.has(currentSlug)) {
           const newCompleted = new Set(prevCompleted);
           newCompleted.add(currentSlug);
-          sessionStorage.setItem('completedItems', JSON.stringify([...newCompleted]));
+          const storageKey = `completedItems_${currentCourse}`;
+          sessionStorage.setItem(storageKey, JSON.stringify([...newCompleted]));
+          console.log(`[sidebar] Marked ${currentSlug} as completed for course ${currentCourse}`);
           return newCompleted;
         }
         return prevCompleted;
       });
+      
+      // Update database
+      markItemCompleted(currentSlug, totalCount);
     }
-  }, [pathname]);
+  }, [pathname, totalCount, markItemCompleted, currentCourse]);
 
-  // Extract course from URL - with SSR safety
-  const getCurrentCourse = () => {
-    if (typeof window === 'undefined') return '';
-    const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('course') || '';
-  };
 
   // Fetch content when pathname changes
   useEffect(() => {
@@ -114,6 +164,13 @@ export function CourseSidebar() {
         // Keep nested order: chapter followed by its items
         const combined = Array.isArray(data.allContent) ? data.allContent : [];
         console.log("[sidebar] combined content:", combined);
+        console.log("[sidebar] Content breakdown:", {
+          lessons: (data as any).lessons?.length || 0,
+          tutorials: (data as any).tutorials?.length || 0,
+          quizzes: (data as any).quizzes?.length || 0,
+          challenges: (data as any).challenges?.length || 0,
+          allContent: combined.length
+        });
         setContent(combined);
         
         // Extract course name from the course data or use a default
@@ -133,7 +190,6 @@ export function CourseSidebar() {
   }, [pathname]);
 
   const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
-  const currentCourse = getCurrentCourse();
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -151,7 +207,8 @@ export function CourseSidebar() {
   };
 
   const getStatusIcon = (slug: string) => {
-    return completedItems.has(slug) ? (
+    const isCompleted = isItemCompleted(slug) || completedItems.has(slug);
+    return isCompleted ? (
       <div className="w-2 h-2 bg-green-500 rounded-full" />
     ) : (
       <div className="w-2 h-2 bg-gray-300 rounded-full" />
@@ -165,7 +222,7 @@ export function CourseSidebar() {
     >
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900 truncate">{courseName}</h2>
           <Button
             variant="ghost"
@@ -176,6 +233,27 @@ export function CourseSidebar() {
             {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </div>
+        
+        {/* Progress Counter */}
+        {totalCount > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-blue-900">Progress</span>
+              <span className="text-sm font-bold text-blue-700">
+                {completedCount}/{totalCount}
+              </span>
+            </div>
+            <div className="w-full bg-blue-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${progressPercentage}%` }}
+              />
+            </div>
+            <div className="text-xs text-blue-700 mt-1">
+              {progressPercentage}% Complete
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
