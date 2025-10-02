@@ -217,7 +217,7 @@ export function CourseSidebar() {
 
   return (
     <div 
-      className="bg-white border-r border-gray-200 flex flex-col"
+      className="bg-white border-r border-gray-200 flex flex-col fixed left-0 top-0 h-screen z-10"
       style={{ width: `${sidebarWidth}px` }}
     >
       {/* Header */}

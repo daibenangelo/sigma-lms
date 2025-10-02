@@ -34,12 +34,15 @@ export function Shell({ children }: ShellProps) {
 
   // Check if current path is a course page (e.g., /course/html, /course/css)
   const isCoursePage = pathname?.startsWith("/course/");
+  
+  // Check if current path is a lesson, tutorial, quiz, or challenge page
+  const isContentPage = pathname?.match(/^\/(lesson|tutorial|quiz|challenge)\//);
 
   const isStandalonePage = standalonePages.some(page => pathname?.startsWith(page));
   const isNavbarOnlyPage = navbarOnlyPages.some(page => pathname?.startsWith(page));
   const isAuthPage = authPages.some(page => pathname?.startsWith(page));
 
-  if (isStandalonePage || isCoursePage || isAuthPage) {
+  if (isStandalonePage || isAuthPage) {
     return <Providers>{children}</Providers>;
   }
 
@@ -62,7 +65,7 @@ export function Shell({ children }: ShellProps) {
         <Navbar />
         <div className="flex">
           <CourseSidebar />
-          <main className="flex-1">
+          <main className="flex-1 pl-80">
             {children}
           </main>
         </div>

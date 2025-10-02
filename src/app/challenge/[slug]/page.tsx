@@ -147,28 +147,29 @@ export default async function ChallengePage({ params, searchParams }: { params: 
         </section>
       )}
 
-      {/* Test JS Section */}
-      {fields.testJS && (
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">Test (JavaScript)</h2>
-          <div className="p-6 rounded-lg border border-purple-200 bg-purple-50">
-            <RichText document={fields.testJS} />
-          </div>
-        </section>
-      )}
+      {/* Code Editor Section */}
+      <section className="mb-8">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900">Code Editor</h2>
+        <div className="p-6 rounded-lg border border-gray-200 bg-white">
+          <p className="text-gray-600 mb-4">
+            Use the code editor below to work on your challenge. You can write, test, and debug your code here.
+          </p>
+          <StackBlitzToggle 
+            document={{
+              nodeType: 'document',
+              content: [{
+                nodeType: 'paragraph',
+                content: [{
+                  nodeType: 'text',
+                  value: 'https://stackblitz.com/edit/web-platform-example'
+                }]
+              }]
+            }} 
+            className="mb-6"
+          />
+        </div>
+      </section>
 
-      {/* Full Code Solution Section */}
-      {fields.fullCodeSolution && (
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">Full Code Solution</h2>
-          <div className="p-6 rounded-lg border border-green-200 bg-green-50">
-            <StackBlitzToggle 
-              document={fields.fullCodeSolution} 
-              className="mb-6"
-            />
-          </div>
-        </section>
-      )}
     </div>
   );
 }
