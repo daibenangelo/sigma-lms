@@ -43,6 +43,18 @@ const getCachedCourses = unstable_cache(
     const transformedCourses = await Promise.all(
       courses.map(async (course) => {
         const courseSlug = course.fields.slug;
+        if (!courseSlug || typeof courseSlug !== 'string') {
+          return {
+            id: course.sys.id,
+            title: course.fields.title,
+            slug: course.fields.slug,
+            chapters: course.fields.chapters || [],
+            quizCount: 0,
+            tutorialCount: 0,
+            challengeCount: 0,
+            progressPercentage: 0
+          };
+        }
         const contentCounts = await getCachedCourseContent(courseSlug);
 
         return {

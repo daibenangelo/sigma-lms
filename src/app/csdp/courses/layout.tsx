@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { BookOpen, HelpCircle, Circle, Swords, ChevronLeft, FileText, PlayCircle, X } from "lucide-react";
 import { CourseCard } from "./course-card";
@@ -32,7 +32,7 @@ interface CourseContent {
   courseName: string;
 }
 
-export default function FusedCourseLayout({
+function FusedCourseContent({
   children,
   courses = [],
 }: {
@@ -288,5 +288,28 @@ export default function FusedCourseLayout({
         )}
       </div>
     </div>
+  );
+}
+
+export default function FusedCourseLayout({
+  children,
+  courses = [],
+}: {
+  children: React.ReactNode;
+  courses?: Course[];
+}) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading courses...</p>
+        </div>
+      </div>
+    }>
+      <FusedCourseContent courses={courses}>
+        {children}
+      </FusedCourseContent>
+    </Suspense>
   );
 }

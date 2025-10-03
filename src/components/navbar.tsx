@@ -42,7 +42,28 @@ export function Navbar() {
   const [isClient, setIsClient] = useState(false);
   const { stats } = useApiCounter();
   const { fetchLessons } = useLessonsFetch();
-  const { user, signOut } = useAuth();
+  const { user, signOut, session, loading } = useAuth();
+
+  // Debug auth state
+  useEffect(() => {
+    console.log('🔍 NAVBAR: Auth state:', {
+      user: user?.email || 'No user',
+      session: session?.user?.email || 'No session',
+      loading,
+      hasAccessToken: !!session?.access_token
+    });
+  }, [user, session, loading]);
+
+  // Force refresh auth state if we're on a protected route but no user
+  useEffect(() => {
+    const protectedRoutes = ['/programs', '/csdp', '/course', '/lesson', '/tutorial', '/quiz', '/challenge', '/dashboard', '/profile'];
+    const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+    
+    if (isProtectedRoute && !loading && !user && !session) {
+      console.log('🚨 NAVBAR: On protected route but no auth - forcing redirect to login');
+      window.location.href = '/auth/login';
+    }
+  }, [pathname, loading, user, session]);
 
   // Handle hydration
   useEffect(() => {
@@ -231,7 +252,9 @@ export function Navbar() {
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={async () => {
+                      console.log('🚪 NAVBAR: Starting logout')
                       await signOut()
+                      console.log('🚪 NAVBAR: Logout complete, redirecting')
                       window.location.href = '/auth/login'
                     }}
                     className="flex items-center space-x-2 text-red-600"

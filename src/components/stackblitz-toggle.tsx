@@ -148,7 +148,6 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
         // Embed the project using StackBlitz SDK
         const embedPromise = StackBlitzSDK.embedProjectId('stackblitz-editor', projectId, {
           openFile: 'index.html',
-          view: 'both',
           hideNavigation: true,
           hideDevTools: false,
           devToolsHeight: 33

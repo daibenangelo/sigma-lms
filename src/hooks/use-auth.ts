@@ -1,7 +1,7 @@
-import { useAuth } from '@/contexts/auth-context'
+import { useAuth as useAuthContext } from '@/contexts/auth-context'
 
 export function useAuth() {
-  return useAuth()
+  return useAuthContext()
 }
 
 // Additional auth-related hooks can be added here
