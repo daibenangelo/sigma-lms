@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
@@ -10,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -17,42 +19,36 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      console.log('🔐 CLIENT: Starting login for:', email)
+      console.log('🔐 LOGIN: Starting login for:', email)
       
-      // Direct client-side login to trigger auth context updates
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      console.log('📊 CLIENT: Login result:', {
-        hasData: !!data,
-        hasSession: !!data?.session,
-        hasUser: !!data?.user,
-        error: error?.message
-      })
+      console.log('📊 LOGIN: Result:', { hasData: !!data, hasSession: !!data?.session, hasUser: !!data?.user, error: error?.message })
 
       if (error) {
-        console.error('❌ CLIENT: Login failed:', error)
+        console.error('❌ LOGIN: Error:', error.message)
         setError(error.message)
         setLoading(false)
         return
       }
 
       if (!data?.session) {
-        console.error('❌ CLIENT: No session created')
+        console.error('❌ LOGIN: No session')
         setError('Login failed - no session created')
         setLoading(false)
         return
       }
 
-      console.log('✅ CLIENT: Login successful, redirecting...')
+      console.log('✅ LOGIN: Success! Redirecting...')
       
-      // Force a hard refresh to ensure auth context is updated
+      // Simple redirect - no fancy stuff
       window.location.href = '/programs'
       
-    } catch (err) {
-      console.error('❌ CLIENT: Login exception:', err)
+    } catch (err: any) {
+      console.error('❌ LOGIN: Exception:', err)
       setError('An unexpected error occurred. Please try again.')
       setLoading(false)
     }

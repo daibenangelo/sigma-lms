@@ -112,6 +112,11 @@ export default async function ChallengePage({ params, searchParams }: { params: 
 
   const { fields } = challengeData;
 
+  // Debug: Log the starterCode field
+  console.log('[challenge] Starter Code field:', fields.starterCode);
+
+  const testJS = fields.testJS;
+
   return (
     <div className="max-w-4xl mx-auto">
       <h1 className="text-3xl font-bold mb-2">{fields.title}</h1>
@@ -137,15 +142,6 @@ export default async function ChallengePage({ params, searchParams }: { params: 
         </section>
       )}
 
-      {/* Test Section */}
-      {fields.test && (
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">Test</h2>
-          <div className="p-6 rounded-lg border border-orange-200 bg-orange-50">
-            <RichText document={fields.test} />
-          </div>
-        </section>
-      )}
 
       {/* Code Editor Section */}
       <section className="mb-8">
@@ -155,7 +151,7 @@ export default async function ChallengePage({ params, searchParams }: { params: 
             Use the code editor below to work on your challenge. You can write, test, and debug your code here.
           </p>
           <StackBlitzToggle 
-            document={{
+            document={fields.starterCode || {
               nodeType: 'document',
               content: [{
                 nodeType: 'paragraph',
@@ -165,6 +161,7 @@ export default async function ChallengePage({ params, searchParams }: { params: 
                 }]
               }]
             }} 
+            testJS={testJS}
             className="mb-6"
           />
         </div>

@@ -300,11 +300,6 @@ export function CourseSidebar() {
                     </div>
                     <div className="flex items-center space-x-2">
                       {getStatusIcon(item.slug)}
-                      {isChallenge && (
-                        <Badge variant="destructive" className="text-xs">
-                          Challenge
-                        </Badge>
-                      )}
                     </div>
                   </Link>
                 </div>

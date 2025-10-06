@@ -17,9 +17,10 @@ import StackBlitzSDK from '@stackblitz/sdk';
 interface StackBlitzToggleProps {
   document?: any;
   className?: string;
+  testJS?: string; // Add testJS prop
 }
 
-export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleProps) {
+export function StackBlitzToggle({ document, className = "", testJS }: StackBlitzToggleProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [hasSnapshot, setHasSnapshot] = useState(false);
@@ -29,6 +30,16 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
   const [isEmbedded, setIsEmbedded] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [isChallenge, setIsChallenge] = useState(false);
+
+  // Detect if this is a challenge page
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isChallengePage = window.location.pathname.includes('/challenge/');
+      setIsChallenge(isChallengePage);
+    }
+  }, []);
 
   // Extract StackBlitz URL from fullCodeSolution RichText field
   useEffect(() => {
@@ -139,7 +150,7 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
       console.log('[StackBlitz] Embedding project with URL:', stackblitzUrl);
       
       try {
-        // Extract project ID from URL
+        // Extract project ID from URL - just the project name for embedding
         const url = new URL(stackblitzUrl);
         const projectId = url.pathname.split('/').pop() || 'default';
         
@@ -247,9 +258,15 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
       console.log('[StackBlitz] Final VM access result:', { vmAccessSuccess, hasSnapshot: !!vmSnapshot });
       
       // Create snapshot with VM data if available
+      // Use the correct projectId format for saving (with ?file=index.html)
+      const url = new URL(stackblitzUrl);
+      const pathnameParts = url.pathname.split('/');
+      const projectName = pathnameParts[pathnameParts.length - 1];
+      const snapshotProjectId = `${projectName}?file=index.html`;
+
       const snapshot = {
         timestamp: Date.now(),
-        projectId: projectId,
+        projectId: snapshotProjectId,
         saved: true,
         vmSnapshot: vmSnapshot,
         data: {
@@ -259,11 +276,11 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
           note: vmAccessSuccess ? "VM snapshot captured using getFsSnapshot()" : "VM access failed"
         }
       };
-      
-      // Save to localStorage
-      localStorage.setItem(`stackblitz-snapshot-${projectId}`, JSON.stringify(snapshot));
+
+      // Save to localStorage using the same key format
+      localStorage.setItem(`stackblitz-snapshot-${snapshotProjectId}`, JSON.stringify(snapshot));
       const currentTime = Date.now();
-      localStorage.setItem(`stackblitz-snapshot-${projectId}-timestamp`, currentTime.toString());
+      localStorage.setItem(`stackblitz-snapshot-${snapshotProjectId}-timestamp`, currentTime.toString());
       
       setHasSnapshot(true);
       setLastSaveTime(new Date(currentTime));
@@ -294,9 +311,15 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
         return;
       }
       
-      const snapshotData = localStorage.getItem(`stackblitz-snapshot-${projectId}`);
+      // Use the same projectId format as when saving
+      const url = new URL(stackblitzUrl);
+      const pathnameParts = url.pathname.split('/');
+      const projectName = pathnameParts[pathnameParts.length - 1]; // Just the project name
+      const snapshotProjectId = `${projectName}?file=index.html`;
+
+      const snapshotData = localStorage.getItem(`stackblitz-snapshot-${snapshotProjectId}`);
       if (!snapshotData) {
-        console.log('[StackBlitz] No snapshot found');
+        console.log('[StackBlitz] No snapshot found for projectId:', snapshotProjectId);
         setSaveStatus('error');
         return;
       }
@@ -409,6 +432,114 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
     return null;
   }
 
+  const runTests = async () => {
+    if (!testJS) {
+      console.warn('[StackBlitz] No test code provided');
+      return;
+    }
+
+    // Extract text content from RichText document
+    const extractTextFromRichText = (richText: any): string => {
+      if (typeof richText === 'string') return richText;
+
+      if (richText && richText.content && Array.isArray(richText.content)) {
+        return richText.content.map((node: any) => {
+          if (node.nodeType === 'text' && node.value) {
+            return node.value;
+          }
+          if (node.nodeType === 'paragraph' && node.content) {
+            return node.content.map((subNode: any) =>
+              subNode.nodeType === 'text' ? subNode.value : ''
+            ).join('');
+          }
+          return '';
+        }).join('\n');
+      }
+
+      return '';
+    };
+
+    const testCode = extractTextFromRichText(testJS);
+    console.log('🧪 TEST CODE DEBUG:');
+    console.log('Raw testJS object:', testJS);
+    console.log('Extracted test code:', testCode);
+    console.log('Test code length:', testCode.length);
+    console.log('Test code preview (first 200 chars):', testCode.substring(0, 200));
+
+    try {
+      // Wait a bit for localStorage to be updated
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Use the snapshot data that was just saved - this contains the current HTML content
+      console.log('[StackBlitz] Testing against saved snapshot data...');
+
+      // Get the most recent snapshot from localStorage
+      // Extract just the project name (without query params) and add file param
+      const url = new URL(stackblitzUrl);
+      const pathnameParts = url.pathname.split('/');
+      const projectName = pathnameParts[pathnameParts.length - 1]; // Just the project name
+      const projectId = `${projectName}?file=index.html`;
+      const snapshotKey = `stackblitz-snapshot-${projectId}`;
+
+      console.log('[StackBlitz] Looking for snapshot with key:', snapshotKey);
+      console.log('[StackBlitz] Current stackblitzUrl:', stackblitzUrl);
+      console.log('[StackBlitz] Extracted projectId:', projectId);
+
+      // Check all localStorage keys to debug
+      const allKeys = Object.keys(localStorage);
+      const snapshotKeys = allKeys.filter(key => key.startsWith('stackblitz-snapshot-'));
+      console.log('[StackBlitz] All snapshot keys in localStorage:', snapshotKeys);
+
+      const snapshotData = localStorage.getItem(snapshotKey);
+
+      if (!snapshotData) {
+        console.error('[StackBlitz] No snapshot data found for key:', snapshotKey);
+        console.log('[StackBlitz] Available snapshot keys:', snapshotKeys);
+        throw new Error('No snapshot data found - please save first');
+      }
+
+      const snapshot = JSON.parse(snapshotData);
+      console.log('[StackBlitz] Found snapshot:', Object.keys(snapshot.vmSnapshot));
+
+      // Get the HTML content from the snapshot
+      const htmlContent = snapshot.vmSnapshot['index.html'];
+      if (!htmlContent) {
+        throw new Error('No index.html found in snapshot');
+      }
+
+      console.log('[StackBlitz] Testing HTML content:', htmlContent.substring(0, 200) + '...');
+
+      // Create a mock DOM environment for the test
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlContent, 'text/html');
+
+              // Execute test code in the context of the parsed document
+              try {
+                const testFunction = new Function('document', `
+                  ${testCode}
+                  return 'All tests passed!';
+                `);
+                const result = testFunction(doc);
+                setTestResult(result);
+              } catch (testError) {
+                const err = testError as Error;
+                setTestResult(`❌ Test failed: ${err.message}`);
+              }
+
+    } catch (error) {
+      const err = error as Error;
+      console.error('[StackBlitz] Test execution failed:', err);
+      setTestResult(`❌ Test execution failed: ${err.message}`);
+      console.log('Test code for manual execution:', testCode);
+    }
+  };
+
+  const saveAndTest = async () => {
+    setTestResult(null); // Clear previous test result
+    await saveSnapshot();
+    runTests();
+  };
+
   return (
     <div className={`fixed bottom-0 left-0 right-0 z-50 ${className}`}>
       {/* Toggle Button */}
@@ -443,16 +574,25 @@ export function StackBlitzToggle({ document, className = "" }: StackBlitzToggleP
                 
                 {/* Save/Restore Buttons */}
                 <div className="flex gap-2">
-                  <Button
-                    onClick={saveSnapshot}
-                    disabled={saveStatus === 'saving'}
-                    size="sm"
-                    variant="outline"
-                    className="flex items-center gap-1"
-                  >
-                    <Save className="h-3 w-3" />
-                    Save
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={saveAndTest} // Use saveAndTest instead of saveSnapshot
+                      disabled={saveStatus === 'saving'}
+                      size="sm"
+                      variant="outline"
+                      className="flex items-center gap-1"
+                    >
+                      <Save className="h-3 w-3" />
+                      {isChallenge ? 'Save and Check' : 'Save'}
+                    </Button>
+
+                    {/* Test result display */}
+                    {testResult && (
+                      <div className={`text-sm px-2 py-1 rounded ${testResult.includes('❌') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        {testResult}
+                      </div>
+                    )}
+                  </div>
                   
                   {hasSnapshot && (
                     <Button

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useAuth } from '@/contexts/auth-context'
+import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
 export default function ForgotPasswordPage() {
@@ -10,7 +10,6 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const { resetPassword } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -18,7 +17,9 @@ export default function ForgotPasswordPage() {
     setError(null)
     setMessage(null)
 
-    const { error } = await resetPassword(email)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `https://sigma-rlwrvvnu4-daibenangelos-projects.vercel.app/auth/reset-password`,
+    })
     
     if (error) {
       setError(error.message)

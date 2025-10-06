@@ -47,27 +47,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false)
     })
 
-    // Also check session periodically in case server action updated it
-    const interval = setInterval(async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      console.log('🔄 AuthProvider: Interval check - session:', session?.user?.email || 'No session', 'current user:', user?.email || 'No user')
-      if (session && !user) {
-        console.log('🔄 AuthProvider: Found session on interval check:', session.user?.email)
-        setSession(session)
-        setUser(session.user)
-      } else if (!session && user) {
-        console.log('🔄 AuthProvider: Session lost, clearing user')
-        setSession(null)
-        setUser(null)
-      }
-    }, 1000)
-
     return () => {
-      console.log('🧹 AuthProvider: Cleaning up subscription and interval')
+      console.log('🧹 AuthProvider: Cleaning up subscription')
       subscription.unsubscribe()
-      clearInterval(interval)
     }
-  }, [user])
+  }, []) // Remove user dependency to prevent loop
 
   const signOut = async () => {
     console.log('🚪 AuthProvider: Signing out')

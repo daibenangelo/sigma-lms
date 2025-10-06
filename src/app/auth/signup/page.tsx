@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuth } from '@/contexts/auth-context'
+import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
 export default function SignupPage() {
@@ -13,7 +13,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
-  const { signUp } = useAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,7 +21,16 @@ export default function SignupPage() {
     setError(null)
     setMessage(null)
 
-    const { error } = await signUp(email, password, fullName)
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+        emailRedirectTo: `https://sigma-rlwrvvnu4-daibenangelos-projects.vercel.app/auth/login`,
+      },
+    })
     
     if (error) {
       setError(error.message)

@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 export async function signInWithPassword(email: string, password: string) {
   console.log('🔐 SERVER ACTION: Starting login for:', email)
   
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -58,7 +58,7 @@ export async function signInWithPassword(email: string, password: string) {
 export async function signOut() {
   console.log('🚪 SERVER ACTION: Starting logout')
   
-  const cookieStore = cookies()
+  const cookieStore = await cookies()
   
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

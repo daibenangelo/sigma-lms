@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
   console.log('🔒 MIDDLEWARE: Protected route, checking auth:', pathname)
 
   // Create response object
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -82,10 +82,12 @@ export async function middleware(request: NextRequest) {
 
   if (error) {
     console.log('❌ MIDDLEWARE: Session error:', error.message)
+    console.log('🚫 MIDDLEWARE: ERROR - REDIRECTING TO LOGIN')
+    return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  if (!session) {
-    console.log('🚫 MIDDLEWARE: NO SESSION - REDIRECTING TO LOGIN')
+  if (!session || !session.user) {
+    console.log('🚫 MIDDLEWARE: NO SESSION OR USER - REDIRECTING TO LOGIN')
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
