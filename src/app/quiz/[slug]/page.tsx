@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getEntriesByContentType } from "@/lib/contentful";
 import { StrictQuiz } from "@/components/strict-quiz";
+import CompletionIndicator from "@/components/CompletionIndicator";
 
 // Helper function to convert rich text to plain text
 function richTextToPlainText(doc: any): string {
@@ -24,8 +25,10 @@ type Params = {
   params: { slug: string };
 };
 
-export default async function QuizPage({ params }: Params) {
+export default async function QuizPage({ params, searchParams }: any) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const course = typeof sp?.course === 'string' ? sp.course : null;
 
   // Fetch Chapter Quiz (moduleQuiz) by slug
   const chapterQuizItems = await getEntriesByContentType<{
@@ -63,6 +66,7 @@ export default async function QuizPage({ params }: Params) {
 
   return (
     <div className="max-w-4xl mx-auto">
+      <CompletionIndicator type="quiz" slug={slug} course={course} />
       <h1 className="text-3xl font-bold mb-2">{title}</h1>
       <p className="text-gray-600 mb-6">Software Development Programme · Course</p>
       {questions.length > 0 ? (

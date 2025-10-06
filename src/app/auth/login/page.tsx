@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/contexts/auth-context'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +13,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user && !authLoading) {
+      router.push('/programs')
+    }
+  }, [user, authLoading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,36 +28,21 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      console.log('🔐 LOGIN: Starting login for:', email)
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
-      console.log('📊 LOGIN: Result:', { hasData: !!data, hasSession: !!data?.session, hasUser: !!data?.user, error: error?.message })
-
       if (error) {
-        console.error('❌ LOGIN: Error:', error.message)
         setError(error.message)
         setLoading(false)
         return
       }
 
-      if (!data?.session) {
-        console.error('❌ LOGIN: No session')
-        setError('Login failed - no session created')
-        setLoading(false)
-        return
-      }
+      // Success - auth context will handle redirect
+      console.log('Login successful')
 
-      console.log('✅ LOGIN: Success! Redirecting...')
-      
-      // Simple redirect - no fancy stuff
-      window.location.href = '/programs'
-      
     } catch (err: any) {
-      console.error('❌ LOGIN: Exception:', err)
       setError('An unexpected error occurred. Please try again.')
       setLoading(false)
     }

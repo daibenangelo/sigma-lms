@@ -10,7 +10,8 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
-  Code
+  Code,
+  CheckCircle as CheckCircleIcon
 } from "lucide-react";
 import StackBlitzSDK from '@stackblitz/sdk';
 
@@ -32,14 +33,72 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isChallenge, setIsChallenge] = useState(false);
+  const [isQuiz, setIsQuiz] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [completionType, setCompletionType] = useState<'quiz' | 'challenge' | null>(null);
 
-  // Detect if this is a challenge page
+  // Detect page type and completion status
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const isChallengePage = window.location.pathname.includes('/challenge/');
+      const pathname = window.location.pathname;
+      const isChallengePage = pathname.includes('/challenge/');
+      const isQuizPage = pathname.includes('/quiz/');
+
       setIsChallenge(isChallengePage);
+      setIsQuiz(isQuizPage);
+
+      if (isChallengePage) {
+        setCompletionType('challenge');
+        checkChallengeCompletion();
+      } else if (isQuizPage) {
+        setCompletionType('quiz');
+        checkQuizCompletion();
+      }
     }
   }, []);
+
+  // Check if challenge is completed (all tests passed at some point)
+  const checkChallengeCompletion = () => {
+    if (typeof window !== 'undefined') {
+      const challengeSlug = window.location.pathname.split('/').pop();
+      const completedKey = `challenge-completed-${challengeSlug}`;
+      const isCompleted = localStorage.getItem(completedKey) === 'true';
+      setIsCompleted(isCompleted);
+    }
+  };
+
+  // Check if quiz has perfect score
+  const checkQuizCompletion = async () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const quizSlug = window.location.pathname.split('/').pop();
+        const courseSlug = new URLSearchParams(window.location.search).get('course');
+
+        if (!courseSlug) {
+          setIsCompleted(false);
+          return;
+        }
+
+        // Check quiz attempts for perfect score
+        const response = await fetch(`/api/quiz-attempts?quizSlug=${quizSlug}&courseSlug=${courseSlug}`);
+        const data = await response.json();
+
+        // Check if any attempt has a perfect score (100%)
+        const hasPerfectScore = data.attempts?.some((attempt: any) => attempt.score_percentage === 100) || false;
+
+        if (hasPerfectScore) {
+          setIsCompleted(true);
+          // Store in localStorage for faster subsequent checks
+          localStorage.setItem(`quiz-completed-${quizSlug}`, 'true');
+        } else {
+          setIsCompleted(false);
+        }
+      } catch (error) {
+        console.error('Error checking quiz completion:', error);
+        setIsCompleted(false);
+      }
+    }
+  };
 
   // Extract StackBlitz URL from fullCodeSolution RichText field
   useEffect(() => {
@@ -521,6 +580,14 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                 `);
                 const result = testFunction(doc);
                 setTestResult(result);
+
+                // Mark challenge as completed if all tests pass
+                if (isChallenge && result.includes('All tests passed')) {
+                  const challengeSlug = window.location.pathname.split('/').pop();
+                  const completedKey = `challenge-completed-${challengeSlug}`;
+                  localStorage.setItem(completedKey, 'true');
+                  setIsCompleted(true);
+                }
               } catch (testError) {
                 const err = testError as Error;
                 setTestResult(`❌ Test failed: ${err.message}`);
@@ -563,6 +630,14 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
               <div className="flex items-center gap-2">
                 <Code className="h-4 w-4" />
                 <span className="font-medium">Code Editor</span>
+
+                {/* Completion indicator */}
+                {isCompleted && completionType && (
+                  <div className="flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                    <CheckCircleIcon className="h-3 w-3" />
+                    {completionType === 'challenge' ? 'Challenge Complete' : 'Quiz Perfect'}
+                  </div>
+                )}
               </div>
               
               <div className="flex items-center gap-2">
