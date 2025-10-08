@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getEntriesByContentType } from "@/lib/contentful";
+import { unstable_cache } from 'next/cache';
 
-export async function GET() {
-  try {
+// Cached function to get quizzes
+const getCachedQuizzes = unstable_cache(
+  async () => {
+    console.log("[api/quizzes] Cached fetch for quizzes...");
+
     // Fetch quizzes directly
     const quizItems = await getEntriesByContentType<{ title?: string; slug?: string }>(
       "quiz",
@@ -39,8 +43,22 @@ export async function GET() {
       }
     });
 
-    return NextResponse.json({ quizzes });
+    console.log(`[api/quizzes] Returning ${quizzes.length} quizzes`);
+    return { quizzes };
+  },
+  ['quizzes'],
+  {
+    tags: ['quizzes'],
+    revalidate: 1800 // 30 minutes
+  }
+);
+
+export async function GET() {
+  try {
+    const result = await getCachedQuizzes();
+    return NextResponse.json(result);
   } catch (e: any) {
+    console.error("[api/quizzes] Error:", e);
     return NextResponse.json({ error: e?.message || "Unknown error" }, { status: 500 });
   }
 }

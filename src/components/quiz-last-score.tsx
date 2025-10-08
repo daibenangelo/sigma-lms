@@ -18,13 +18,28 @@ export default function QuizLastScore({ quizSlug }: Props) {
   const [totalAttempts, setTotalAttempts] = useState<number>(0);
 
   const fetchLast = async () => {
+    console.log('[QuizLastScore] fetchLast called for quiz:', quizSlug);
     try {
       // Use localStorage for attempt tracking
       if (typeof window !== 'undefined') {
-        const local = localStorage.getItem(`quiz-last-${quizSlug}`);
+        console.log('[QuizLastScore] Checking localStorage for quiz:', quizSlug);
+        console.log('[QuizLastScore] localStorage available:', typeof localStorage !== 'undefined');
+        console.log('[QuizLastScore] Storage available:', typeof Storage !== 'undefined');
+
+        // First check the latest attempt key
+        const latestKey = `quiz-last-${quizSlug}`;
+        const local = localStorage.getItem(latestKey);
+
+        console.log('[QuizLastScore] Latest key check:', {
+          latestKey,
+          exists: !!local,
+          localStorageKeys: Object.keys(localStorage).filter(k => k.includes('quiz'))
+        });
+
         if (local) {
           try {
             const attempt = JSON.parse(local);
+            console.log('[QuizLastScore] Parsed latest attempt:', attempt);
             setHasAttempt(true);
             setScore(attempt.score ?? null);
             setTotal(attempt.total_questions ?? null);
@@ -32,18 +47,34 @@ export default function QuizLastScore({ quizSlug }: Props) {
             setPassed(attempt.passed ?? null);
             setWhen(attempt.completed_at ?? null);
             console.log('[QuizLastScore] Loaded latest attempt:', attempt);
-          } catch {
+          } catch (parseError) {
+            console.error('[QuizLastScore] Failed to parse latest attempt:', parseError);
             setHasAttempt(false);
           }
         } else {
+          console.log('[QuizLastScore] No latest attempt found');
           setHasAttempt(false);
         }
 
         // Count total attempts from localStorage keys
         const keys = Object.keys(localStorage);
         const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
-        setTotalAttempts(attemptKeys.length);
-        console.log('[QuizLastScore] Total attempts found:', attemptKeys.length, attemptKeys);
+
+        console.log('[QuizLastScore] localStorage keys found:', {
+          allKeys: keys.length,
+          attemptKeys: attemptKeys.length,
+          quizSlug,
+          keys: attemptKeys,
+          allLocalStorageKeys: keys
+        });
+
+        const total = attemptKeys.length;
+        setTotalAttempts(total);
+        console.log('[QuizLastScore] Total attempts set to:', total);
+
+        // Debug: Check if we can find any quiz-related keys at all
+        const allQuizKeys = keys.filter(key => key.includes('quiz'));
+        console.log('[QuizLastScore] All quiz-related keys in localStorage:', allQuizKeys);
       }
     } catch {
       // ignore
@@ -60,9 +91,22 @@ export default function QuizLastScore({ quizSlug }: Props) {
   useEffect(() => {
     const handleQuizCompleted = () => {
       console.log('[QuizLastScore] Received quiz-completed event, refreshing data...');
-      // Re-fetch data when a quiz is completed
+      console.log('[QuizLastScore] Current localStorage state before refresh:', {
+        keys: Object.keys(localStorage).filter(k => k.includes('quiz')),
+        quizSlug
+      });
+
+      // Re-fetch data when a quiz is completed (increased delay to ensure localStorage is updated)
+      console.log('[QuizLastScore] About to set timeout for fetchLast...');
       setLoaded(false);
-      setTimeout(() => fetchLast(), 100); // Small delay to ensure data is saved
+      setTimeout(() => {
+        console.log('[QuizLastScore] Executing delayed fetchLast...');
+        try {
+          fetchLast();
+        } catch (error) {
+          console.error('[QuizLastScore] Error in delayed fetchLast:', error);
+        }
+      }, 200); // Increased delay to ensure localStorage operations complete
     };
 
     const handleItemCompleted = (event: any) => {

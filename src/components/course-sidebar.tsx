@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useLessonsFetch } from "@/hooks/use-cached-fetch";
 import { useCourseProgress } from "@/hooks/use-course-progress";
+import { useAuth } from "@/contexts/auth-context";
 
 type ContentItem = {
   title: string;
@@ -30,6 +31,7 @@ type ContentItem = {
 
 export function CourseSidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
   const [content, setContent] = useState<ContentItem[]>([]);
   const [courseName, setCourseName] = useState<string>("Course");
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
@@ -122,14 +124,14 @@ export function CourseSidebar() {
 
       // Load completed items from sessionStorage for current course
       useEffect(() => {
-        if (!currentCourse) {
+        if (!currentCourse || !user) {
           setCompletedItems(new Set());
           setViewedItems(new Set());
           return;
         }
 
-        const completedStorageKey = `completedItems_${currentCourse}`;
-        const viewedStorageKey = `viewedItems_${currentCourse}`;
+        const completedStorageKey = `completedItems_${user.id}_${currentCourse}`;
+        const viewedStorageKey = `viewedItems_${user.id}_${currentCourse}`;
 
         const storedCompleted = sessionStorage.getItem(completedStorageKey);
         const storedViewed = sessionStorage.getItem(viewedStorageKey);
@@ -164,7 +166,7 @@ export function CourseSidebar() {
   // Track current page as viewed (only mark as viewed when visiting, not completed)
   useEffect(() => {
     const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
-    if (currentSlug && totalCount > 0 && currentCourse) {
+    if (currentSlug && totalCount > 0 && currentCourse && user) {
       // Check if already viewed in database
       const isAlreadyViewed = isItemViewed(currentSlug);
       
@@ -177,7 +179,7 @@ export function CourseSidebar() {
           if (!prevViewed.has(currentSlug)) {
             const newViewed = new Set(prevViewed);
             newViewed.add(currentSlug);
-            const viewedStorageKey = `viewedItems_${currentCourse}`;
+            const viewedStorageKey = `viewedItems_${user.id}_${currentCourse}`;
             sessionStorage.setItem(viewedStorageKey, JSON.stringify([...newViewed]));
             console.log(`[sidebar] Marked ${currentSlug} as viewed for course ${currentCourse} (database + sessionStorage)`);
             return newViewed;
@@ -252,13 +254,13 @@ export function CourseSidebar() {
 
   // Function to mark an item as completed (called when requirements are met)
   const markItemAsCompleted = (slug: string) => {
-    if (!currentCourse) return;
+    if (!currentCourse || !user) return;
 
     setCompletedItems(prevCompleted => {
       if (!prevCompleted.has(slug)) {
         const newCompleted = new Set(prevCompleted);
         newCompleted.add(slug);
-        const storageKey = `completedItems_${currentCourse}`;
+        const storageKey = `completedItems_${user.id}_${currentCourse}`;
         sessionStorage.setItem(storageKey, JSON.stringify([...newCompleted]));
         console.log(`[sidebar] Marked ${slug} as completed for course ${currentCourse}`);
         return newCompleted;

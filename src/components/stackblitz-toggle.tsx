@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/auth-context";
 import {
   ChevronUp,
   ChevronDown,
@@ -23,6 +24,7 @@ interface StackBlitzToggleProps {
 }
 
 export function StackBlitzToggle({ document, className = "", testJS }: StackBlitzToggleProps) {
+  const { user: currentUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -61,9 +63,9 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
 
   // Check if challenge is completed (all tests passed at some point)
   const checkChallengeCompletion = () => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && currentUser) {
       const challengeSlug = window.location.pathname.split('/').pop();
-      const completedKey = `challenge-completed-${challengeSlug}`;
+      const completedKey = `challenge-completed-${currentUser.id}-${challengeSlug}`;
       const isCompleted = localStorage.getItem(completedKey) === 'true';
       setIsCompleted(isCompleted);
     }
@@ -92,6 +94,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
           setIsCompleted(true);
           // Store in localStorage for faster subsequent checks
           localStorage.setItem(`quiz-completed-${quizSlug}`, 'true');
+          console.log('[StackBlitz] Quiz completion saved to localStorage:', quizSlug);
         } else {
           setIsCompleted(false);
         }
@@ -591,7 +594,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                 // Mark challenge as completed if all tests pass
                 if (isChallenge && result.includes('All tests passed')) {
                   const challengeSlug = window.location.pathname.split('/').pop();
-                  const completedKey = `challenge-completed-${challengeSlug}`;
+                  const completedKey = `challenge-completed-${currentUser!.id}-${challengeSlug}`;
                   localStorage.setItem(completedKey, 'true');
                   setIsCompleted(true);
 
@@ -659,7 +662,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                           if (typeof window !== 'undefined') {
                             const storageKey = `courseProgress_${currentUser.id}_${courseSlug}`;
                             const existingStorage = localStorage.getItem(storageKey);
-                            let storageData = existingStorage ? JSON.parse(existingStorage) : { completed_items: [] };
+                            const storageData = existingStorage ? JSON.parse(existingStorage) : { completed_items: [] };
                             
                             if (!storageData.completed_items.includes(challengeSlug)) {
                               storageData.completed_items.push(challengeSlug);

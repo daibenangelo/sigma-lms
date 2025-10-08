@@ -20,9 +20,10 @@ class CacheManager {
     cacheMisses: 0
   };
 
-  // Default TTL: 5 minutes for most content, 1 hour for modules
-  private defaultTTL = 5 * 60 * 1000; // 5 minutes
+  // Default TTL: 10 minutes for most content, 1 hour for modules, 30 minutes for quizzes
+  private defaultTTL = 10 * 60 * 1000; // 10 minutes
   private moduleTTL = 60 * 60 * 1000; // 1 hour
+  private quizTTL = 30 * 60 * 1000; // 30 minutes
 
   constructor() {
     // Load stats from localStorage on client side
@@ -54,8 +55,11 @@ class CacheManager {
   }
 
   private getTTL(endpoint: string): number {
-    if (endpoint.includes("/modules")) {
+    if (endpoint.includes("/modules") || endpoint.includes("modules")) {
       return this.moduleTTL;
+    }
+    if (endpoint.includes("/quizzes") || endpoint.includes("quizzes")) {
+      return this.quizTTL;
     }
     return this.defaultTTL;
   }

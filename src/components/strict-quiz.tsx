@@ -270,12 +270,42 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
           passed,
           completed_at: new Date().toISOString()
         };
-        if (quizSlug) {
-          // Use timestamp-based key to create unique entries for counting attempts
+        // Save to localStorage for UI display and counting
+        try {
           const timestamp = Date.now();
-          localStorage.setItem(`quiz-${quizSlug}-${timestamp}`, JSON.stringify(localAttempt));
-          // Also update the "latest" key for easy access
-          localStorage.setItem(`quiz-last-${quizSlug}`, JSON.stringify(localAttempt));
+          const attemptKey = `quiz-${quizSlug}-${timestamp}`;
+          const latestKey = `quiz-last-${quizSlug}`;
+
+          console.log('[StrictQuiz] Saving quiz attempt to localStorage:', {
+            quizSlug,
+            timestamp,
+            attemptKey,
+            latestKey,
+            attemptData: localAttempt
+          });
+
+          localStorage.setItem(attemptKey, JSON.stringify(localAttempt));
+          localStorage.setItem(latestKey, JSON.stringify(localAttempt));
+
+          // Debug: Check what keys exist in localStorage after saving
+          const allKeys = Object.keys(localStorage);
+          const quizKeys = allKeys.filter(key => key.includes(quizSlug));
+          console.log('[StrictQuiz] Quiz attempt saved to localStorage');
+          console.log('[StrictQuiz] localStorage keys after save:', quizKeys);
+          console.log('[StrictQuiz] Saved data verification:', {
+            attemptKey: localStorage.getItem(attemptKey) ? 'EXISTS' : 'MISSING',
+            latestKey: localStorage.getItem(latestKey) ? 'EXISTS' : 'MISSING'
+          });
+
+          // Dispatch events to update other components (small delay to ensure localStorage is updated)
+          if (typeof window !== 'undefined') {
+            console.log('[StrictQuiz] Dispatching quiz-completed event');
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('quiz-completed'));
+            }, 10);
+          }
+        } catch (localStorageError) {
+          console.error('[StrictQuiz] Failed to save to localStorage:', localStorageError);
         }
       } catch {}
     } catch (error) {

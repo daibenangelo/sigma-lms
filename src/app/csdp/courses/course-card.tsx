@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { BookOpen, HelpCircle, Circle, Swords } from "lucide-react";
 import { useCourseProgress } from "@/hooks/use-course-progress";
+import { useAuth } from "@/contexts/auth-context";
 import { useState, useEffect } from "react";
 
 interface Course {
@@ -24,6 +25,7 @@ interface CourseCardProps {
 }
 
 export function CourseCard({ course, isSelected = false, onSelect, isCompact = false }: CourseCardProps) {
+  const { user } = useAuth();
   const { progress, isItemViewed } = useCourseProgress(course.slug);
   const [courseContent, setCourseContent] = useState<any>(null);
 
@@ -83,11 +85,11 @@ export function CourseCard({ course, isSelected = false, onSelect, isCompact = f
   const dbCompletedCount = progress?.completed_items?.length || 0;
   const dbViewedCount = progress?.viewed_items?.length || 0;
   
-  // SessionStorage fallback (same as sidebar)
-  const sessionCompletedItems = typeof window !== 'undefined' ?
-    new Set(JSON.parse(sessionStorage.getItem(`completedItems_${course.slug}`) || '[]')) : new Set();
-  const sessionViewedItems = typeof window !== 'undefined' ?
-    new Set(JSON.parse(sessionStorage.getItem(`viewedItems_${course.slug}`) || '[]')) : new Set();
+  // User-specific sessionStorage fallback (same as sidebar)
+  const sessionCompletedItems = typeof window !== 'undefined' && user ?
+    new Set(JSON.parse(sessionStorage.getItem(`completedItems_${user.id}_${course.slug}`) || '[]')) : new Set();
+  const sessionViewedItems = typeof window !== 'undefined' && user ?
+    new Set(JSON.parse(sessionStorage.getItem(`viewedItems_${user.id}_${course.slug}`) || '[]')) : new Set();
   
   const sessionCompletedCount = sessionCompletedItems.size;
   const sessionViewedCount = sessionViewedItems.size;
@@ -128,6 +130,10 @@ export function CourseCard({ course, isSelected = false, onSelect, isCompact = f
     viewedItems: progress?.viewed_items,
     sessionStorageCompleted: Array.from(sessionCompletedItems),
     sessionStorageViewed: Array.from(sessionViewedItems),
+    localStorageKeys: {
+      completed: `completedItems_${user?.id}_${course.slug}`,
+      viewed: `viewedItems_${user?.id}_${course.slug}`
+    },
     usingDatabase: dbCompletedCount > 0 || dbViewedCount > 0
   });
 

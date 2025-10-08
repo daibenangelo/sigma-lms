@@ -5,7 +5,7 @@ import { withCache } from '@/lib/cache';
 
 export function useCachedFetch() {
   const cachedFetch = useCallback(async <T>(
-    url: string, 
+    url: string,
     options?: RequestInit,
     ttl?: number
   ): Promise<T> => {
@@ -29,7 +29,7 @@ export function useCachedFetch() {
 // Specialized hooks for different content types
 export function useLessonsFetch() {
   const { cachedFetch } = useCachedFetch();
-  
+
   const fetchLessons = useCallback(async (course: string) => {
     return cachedFetch<{
       allContent: Array<{
@@ -46,7 +46,7 @@ export function useLessonsFetch() {
 
 export function useModulesFetch() {
   const { cachedFetch } = useCachedFetch();
-  
+
   const fetchModules = useCallback(async (course?: string) => {
     const url = course ? `/api/modules?course=${encodeURIComponent(course)}` : '/api/modules';
     return cachedFetch<Array<{
@@ -61,7 +61,7 @@ export function useModulesFetch() {
 
 export function useQuizzesFetch() {
   const { cachedFetch } = useCachedFetch();
-  
+
   const fetchQuizzes = useCallback(async () => {
     return cachedFetch<Array<{
       title: string;

@@ -86,8 +86,8 @@ export function useCourseProgress(courseSlug?: string) {
       const progressPercentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0;
       const currentViewedItems = viewedItems || progress?.viewed_items || [];
 
-      // Prepare upsert data
-      let upsertData: any = {
+                  // Prepare upsert data
+                  const upsertData: any = {
         user_id: user.id,
         course_slug: courseSlug,
         completed_items: completedItems,

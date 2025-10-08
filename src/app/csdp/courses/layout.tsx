@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { BookOpen, HelpCircle, Circle, Swords, ChevronLeft, FileText, PlayCircle, X } from "lucide-react";
 import { CourseCard } from "./course-card";
 import { useCourseProgress } from "@/hooks/use-course-progress";
+import { useAuth } from "@/contexts/auth-context";
 
 interface Course {
   id: string;
@@ -48,6 +49,7 @@ function FusedCourseContent({
   const searchParams = useSearchParams();
   const router = useRouter();
   const courseSlug = searchParams.get('course');
+  const { user } = useAuth();
   
   // Get course progress for the selected course
   const { progress: courseProgress, isItemViewed: dbIsItemViewed } = useCourseProgress(selectedCourse?.slug);
@@ -129,9 +131,9 @@ function FusedCourseContent({
       return true;
     }
     
-    // Check course-specific sessionStorage (same as sidebar)
-    if (typeof window !== 'undefined') {
-      const storageKey = `completedItems_${selectedCourse.slug}`;
+    // Check user-specific course sessionStorage (same as sidebar)
+    if (typeof window !== 'undefined' && user) {
+      const storageKey = `completedItems_${user.id}_${selectedCourse.slug}`;
       const stored = sessionStorage.getItem(storageKey);
       if (stored) {
         try {
@@ -154,9 +156,9 @@ function FusedCourseContent({
     const dbViewed = dbIsItemViewed(itemSlug);
     if (dbViewed) return true;
     
-    // Fallback to sessionStorage
-    if (typeof window !== 'undefined') {
-      const storageKey = `viewedItems_${selectedCourse.slug}`;
+    // Fallback to user-specific sessionStorage
+    if (typeof window !== 'undefined' && user) {
+      const storageKey = `viewedItems_${user.id}_${selectedCourse.slug}`;
       const stored = sessionStorage.getItem(storageKey);
       if (stored) {
         try {
