@@ -24,44 +24,50 @@ interface CourseCardProps {
 }
 
 export function CourseCard({ course, isSelected = false, onSelect, isCompact = false }: CourseCardProps) {
-  const { progress } = useCourseProgress(course.slug);
-  const [actualContentCount, setActualContentCount] = useState<number>(0);
+  const { progress, isItemViewed } = useCourseProgress(course.slug);
+  const [courseContent, setCourseContent] = useState<any>(null);
 
-  // Fetch actual content count from API (same as sidebar)
+  // Fetch course content to get actual items (same as sidebar)
   useEffect(() => {
-    const fetchContentCount = async () => {
+    const fetchCourseContent = async () => {
       try {
         const response = await fetch(`/api/lessons?course=${course.slug}`);
         const data = await response.json();
         if (data && data.allContent) {
-          setActualContentCount(data.allContent.length);
+          setCourseContent(data);
         }
       } catch (error) {
-        console.error('Failed to fetch content count:', error);
+        console.error('Failed to fetch course content:', error);
         // Fallback to calculated count
-        setActualContentCount(course.chapters.length + course.quizCount + course.tutorialCount + course.challengeCount);
+        setCourseContent({
+          allContent: [],
+          lessons: [],
+          tutorials: [],
+          quizzes: [],
+          challenges: []
+        });
       }
     };
 
-    fetchContentCount();
-  }, [course.slug, course.chapters.length, course.quizCount, course.tutorialCount, course.challengeCount]);
+    fetchCourseContent();
+  }, [course.slug]);
 
-  // Listen for progress updates and re-fetch content count
+  // Listen for progress updates and re-fetch content
   useEffect(() => {
     const handleProgressUpdate = () => {
-      // Re-fetch content count when progress updates
-      const fetchContentCount = async () => {
+      // Re-fetch content when progress updates
+      const fetchCourseContent = async () => {
         try {
           const response = await fetch(`/api/lessons?course=${course.slug}`);
           const data = await response.json();
           if (data && data.allContent) {
-            setActualContentCount(data.allContent.length);
+            setCourseContent(data);
           }
         } catch (error) {
-          console.error('Failed to fetch content count on progress update:', error);
+          console.error('Failed to fetch course content on progress update:', error);
         }
       };
-      fetchContentCount();
+      fetchCourseContent();
     };
 
     if (typeof window !== 'undefined') {
@@ -70,30 +76,59 @@ export function CourseCard({ course, isSelected = false, onSelect, isCompact = f
     }
   }, [course.slug]);
   
-  // Use the same total count as sidebar (content.length from lessons API)
-  const totalContent = actualContentCount;
-  // Use database progress if available, otherwise use sessionStorage fallback like sidebar
+  // Use the same progress calculation logic as sidebar
+  const totalContent = courseContent?.allContent?.length || 0;
+  
+  // Database progress (prioritized like sidebar)
   const dbCompletedCount = progress?.completed_items?.length || 0;
+  const dbViewedCount = progress?.viewed_items?.length || 0;
+  
+  // SessionStorage fallback (same as sidebar)
   const sessionCompletedItems = typeof window !== 'undefined' ?
     new Set(JSON.parse(sessionStorage.getItem(`completedItems_${course.slug}`) || '[]')) : new Set();
+  const sessionViewedItems = typeof window !== 'undefined' ?
+    new Set(JSON.parse(sessionStorage.getItem(`viewedItems_${course.slug}`) || '[]')) : new Set();
+  
   const sessionCompletedCount = sessionCompletedItems.size;
+  const sessionViewedCount = sessionViewedItems.size;
+  
+  // Use database progress if available, otherwise use sessionStorage (same as sidebar)
   const completedCount = dbCompletedCount > 0 ? dbCompletedCount : sessionCompletedCount;
-  const progressPercentage = totalContent > 0 ? Math.round((completedCount / totalContent) * 100) : 0;
+  const viewedCount = dbViewedCount > 0 ? dbViewedCount : sessionViewedCount;
+  
+  // Count content pages (lessons/chapters) as viewed since they don't need completion (same as sidebar)
+  const contentPages = courseContent?.allContent?.filter((item: any) => item.type === 'lesson' || item.type === 'chapter') || [];
+  const contentPagesViewed = contentPages.filter((item: any) => {
+    const isViewed = isItemViewed(item.slug) || sessionViewedItems.has(item.slug);
+    return isViewed;
+  }).length;
+  
+  // Progress includes both completed items and viewed content pages (same as sidebar)
+  const effectiveProgressCount = completedCount + contentPagesViewed;
+  const progressPercentage = totalContent > 0 ? Math.round((effectiveProgressCount / totalContent) * 100) : 0;
 
   // Check if there's any progress (database or sessionStorage)
   const hasProgress = progressPercentage > 0;
   const buttonText = hasProgress ? "Continue" : "Start Learning";
 
-  // Debug logging
+  // Debug logging (matches sidebar format)
   console.log(`[CourseCard] ${course.slug}:`, {
-    actualContentCount,
     totalContent,
     dbCompletedCount,
+    dbViewedCount,
     sessionCompletedCount,
+    sessionViewedCount,
     completedCount,
+    viewedCount,
+    contentPagesCount: contentPages.length,
+    contentPagesViewed,
+    effectiveProgressCount,
     progressPercentage,
     completedItems: progress?.completed_items,
-    sessionStorageItems: Array.from(sessionCompletedItems)
+    viewedItems: progress?.viewed_items,
+    sessionStorageCompleted: Array.from(sessionCompletedItems),
+    sessionStorageViewed: Array.from(sessionViewedItems),
+    usingDatabase: dbCompletedCount > 0 || dbViewedCount > 0
   });
 
   const cardContent = (
@@ -111,30 +146,7 @@ export function CourseCard({ course, isSelected = false, onSelect, isCompact = f
             <h3 className="text-xl font-semibold text-gray-900 group-hover:text-blue-600">
               {course.title}
             </h3>
-            {isCompact ? (
-              <div className="flex items-center space-x-2">
-                {course.chapters.length > 0 && (
-                  <div className="flex items-center justify-center w-6 h-6 bg-blue-100 rounded-full">
-                    <span className="text-xs font-medium text-blue-600">{course.chapters.length}</span>
-                  </div>
-                )}
-                {course.quizCount > 0 && (
-                  <div className="flex items-center justify-center w-6 h-6 bg-yellow-100 rounded-full">
-                    <span className="text-xs font-medium text-yellow-600">{course.quizCount}</span>
-                  </div>
-                )}
-                {course.tutorialCount > 0 && (
-                  <div className="flex items-center justify-center w-6 h-6 bg-green-100 rounded-full">
-                    <span className="text-xs font-medium text-green-600">{course.tutorialCount}</span>
-                  </div>
-                )}
-                {course.challengeCount > 0 && (
-                  <div className="flex items-center justify-center w-6 h-6 bg-red-100 rounded-full">
-                    <span className="text-xs font-medium text-red-600">{course.challengeCount}</span>
-                  </div>
-                )}
-              </div>
-            ) : (
+            {isCompact ? null : (
               <div className="flex items-center space-x-4 text-sm text-gray-500">
                 <span>{course.chapters.length} chapter{course.chapters.length !== 1 ? 's' : ''}</span>
                 {course.quizCount > 0 && (
@@ -163,22 +175,22 @@ export function CourseCard({ course, isSelected = false, onSelect, isCompact = f
         <div className="flex items-center space-x-4">
           {/* Progress bar */}
           {totalContent > 0 && (
-            <div className="flex items-center space-x-2">
-              <div className="w-20 bg-gray-200 rounded-full h-2">
+            <div className="flex items-center space-x-3">
+              <div className="w-24 bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${progressPercentage}%` }}
                 />
               </div>
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-sm text-gray-600 font-medium w-12 text-right">
                 {progressPercentage}%
               </span>
             </div>
           )}
           
-          <div className="flex items-center text-blue-600 font-medium group-hover:text-blue-700">
-            {buttonText}
-            <svg className="ml-2 h-4 w-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center text-blue-600 font-medium group-hover:text-blue-700 w-32">
+            <span className="truncate">{buttonText}</span>
+            <svg className="ml-2 h-4 w-4 transform group-hover:translate-x-1 transition-transform flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </div>

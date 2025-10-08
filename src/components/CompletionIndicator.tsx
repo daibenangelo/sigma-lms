@@ -29,6 +29,33 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
         setLoading(false);
         return;
       }
+
+      // Check localStorage for perfect score (same logic as StrictQuiz)
+      if (typeof window !== 'undefined') {
+        const keys = Object.keys(localStorage);
+        const attemptKeys = keys.filter(key => key.startsWith(`quiz-${slug}-`));
+        
+        let hasPerfect = false;
+        for (const key of attemptKeys) {
+          try {
+            const attemptData = JSON.parse(localStorage.getItem(key) || '{}');
+            if (attemptData.score_percentage === 100 || attemptData.passed === true) {
+              hasPerfect = true;
+              break;
+            }
+          } catch (e) {
+            // Ignore malformed data
+          }
+        }
+        
+        if (hasPerfect) {
+          setCompleted(true);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Fallback to API if no perfect score found in localStorage
       const res = await fetch(`/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`);
       if (!res.ok) {
         setCompleted(false);
@@ -61,11 +88,22 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
       }
     };
 
+    const handleQuizCompleted = () => {
+      if (type === 'quiz') {
+        console.log('[CompletionIndicator] Received quiz-completed event');
+        checkStatus();
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('item-completed', handleItemCompleted);
-      return () => window.removeEventListener('item-completed', handleItemCompleted);
+      window.addEventListener('quiz-completed', handleQuizCompleted);
+      return () => {
+        window.removeEventListener('item-completed', handleItemCompleted);
+        window.removeEventListener('quiz-completed', handleQuizCompleted);
+      };
     }
-  }, [slug]);
+  }, [slug, type]);
 
   if (loading) return null;
 

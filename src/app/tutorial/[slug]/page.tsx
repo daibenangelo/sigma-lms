@@ -61,7 +61,6 @@ export default async function TutorialPage({ params }: Params) {
       {/* Code Editor - Same as Challenges */}
       <StackBlitzToggle 
         document={sectionStarter} 
-        className="mb-6"
       />
 
       {sectionInstructions.length > 0 && (

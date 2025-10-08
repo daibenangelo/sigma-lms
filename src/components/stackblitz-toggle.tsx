@@ -205,9 +205,9 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
     return () => clearInterval(timer);
   }, []);
 
-  // Embed StackBlitz project when URL is available and panel is open
+  // Embed StackBlitz project when URL is available (only once)
   useEffect(() => {
-    if (stackblitzUrl && isOpen) {
+    if (stackblitzUrl && !isEmbedded) {
       console.log('[StackBlitz] Embedding project with URL:', stackblitzUrl);
       
       try {
@@ -221,10 +221,6 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
         if (editorRef.current) {
           editorRef.current.innerHTML = '';
         }
-        
-        // Reset embedded state
-        setIsEmbedded(false);
-        setVm(null);
         
         // Embed the project using StackBlitz SDK
         const embedPromise = StackBlitzSDK.embedProjectId('stackblitz-editor', projectId, {
@@ -246,7 +242,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
         console.error('[StackBlitz] Error embedding project:', error);
       }
     }
-  }, [stackblitzUrl, isOpen]);
+  }, [stackblitzUrl, isEmbedded]);
 
   // Save function using StackBlitz SDK getFsSnapshot() with proper VM instance
   const saveSnapshot = async () => {
@@ -715,21 +711,20 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
   return (
     <div className={`fixed bottom-0 left-0 right-0 z-50 ${className}`}>
       {/* Toggle Button */}
-      <div className="flex justify-center mb-2">
+      <div className="flex justify-end mb-2 mr-4">
         <Button
           onClick={() => setIsOpen(!isOpen)}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-t-lg"
         >
           <Code className="h-4 w-4" />
-          StackBlitz Editor
+          Work on Code
           {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </Button>
       </div>
 
       {/* Editor Panel */}
-      {isOpen && (
-        <div className="bg-white border-t border-gray-200 shadow-lg">
-          <div className="h-[50vh] flex flex-col">
+      <div className={`bg-white border-t border-gray-200 shadow-lg transition-all duration-300 ${isOpen ? 'block' : 'hidden'}`}>
+        <div className="h-[50vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
               <div className="flex items-center gap-2">
@@ -848,7 +843,6 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 }

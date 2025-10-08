@@ -164,7 +164,6 @@ export default async function ChallengePage({ params, searchParams }: { params: 
               }]
             }} 
             testJS={testJS}
-            className="mb-6"
           />
         </div>
       </section>

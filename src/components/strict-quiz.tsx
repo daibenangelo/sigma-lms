@@ -10,8 +10,9 @@ export interface QuizQuestion {
   id: string;
   question: string;
   options: string[];
-  correctAnswer: number;
+  correctAnswer: number | number[]; // Support single or multiple correct answers
   explanation: string;
+  isMultipleChoice?: boolean; // Flag to indicate if multiple answers are allowed
 }
 
 interface StrictQuizProps {
@@ -25,7 +26,7 @@ type QuizState = 'not-started' | 'in-progress' | 'submitted';
 export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizProps) {
   const [quizState, setQuizState] = useState<QuizState>('not-started');
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<number[]>(new Array(questions.length).fill(-1));
+  const [selectedAnswers, setSelectedAnswers] = useState<(number | number[])[]>(new Array(questions.length).fill(-1));
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [endTime, setEndTime] = useState<Date | null>(null);
   const [timeSpent, setTimeSpent] = useState<number>(0);
@@ -40,7 +41,12 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
   const currentQ = questions[currentQuestion];
   const isLastQuestion = currentQuestion === questions.length - 1;
   const isFirstQuestion = currentQuestion === 0;
-  const allQuestionsAnswered = selectedAnswers.every(answer => answer !== -1);
+  const allQuestionsAnswered = selectedAnswers.every(answer => {
+    if (Array.isArray(answer)) {
+      return answer.length > 0; // Multiple choice questions must have at least one selection
+    }
+    return answer !== -1; // Single choice questions
+  });
   // Load last attempt and check for perfect score on mount
   useEffect(() => {
     const loadLastAttempt = async () => {
@@ -114,7 +120,23 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
     if (quizState !== 'in-progress') return;
     
     const newAnswers = [...selectedAnswers];
-    newAnswers[currentQuestion] = answerIndex;
+    const currentAnswer = newAnswers[currentQuestion];
+    
+    if (currentQ.isMultipleChoice) {
+      // Multiple choice: toggle selection
+      if (Array.isArray(currentAnswer)) {
+        const newSelection = currentAnswer.includes(answerIndex)
+          ? currentAnswer.filter(i => i !== answerIndex)
+          : [...currentAnswer, answerIndex];
+        newAnswers[currentQuestion] = newSelection.length > 0 ? newSelection : -1;
+      } else {
+        newAnswers[currentQuestion] = [answerIndex];
+      }
+    } else {
+      // Single choice: replace selection
+      newAnswers[currentQuestion] = answerIndex;
+    }
+    
     setSelectedAnswers(newAnswers);
   };
 
@@ -144,7 +166,26 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
 
   const getScore = () => {
     return questions.reduce((score, q, index) => {
-      return score + (selectedAnswers[index] === q.correctAnswer ? 1 : 0);
+      const selectedAnswer = selectedAnswers[index];
+      const correctAnswer = q.correctAnswer;
+      
+      if (Array.isArray(correctAnswer)) {
+        // Multiple correct answers: check if all correct answers are selected and no incorrect ones
+        if (Array.isArray(selectedAnswer)) {
+          const correctAnswersSet = new Set(correctAnswer);
+          const selectedAnswersSet = new Set(selectedAnswer);
+          
+          // Check if all correct answers are selected and no extra incorrect answers
+          const allCorrectSelected = correctAnswer.every(ans => selectedAnswer.includes(ans));
+          const noIncorrectSelected = selectedAnswer.every(ans => correctAnswer.includes(ans));
+          
+          return score + (allCorrectSelected && noIncorrectSelected ? 1 : 0);
+        }
+        return score; // No selection for multiple choice question
+      } else {
+        // Single correct answer
+        return score + (selectedAnswer === correctAnswer ? 1 : 0);
+      }
     }, 0);
   };
 
@@ -392,24 +433,47 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
             </h2>
 
             <div className="space-y-3">
-              {currentQ.options.map((option, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleAnswerSelect(index)}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
-                    selectedAnswers[currentQuestion] === index
-                      ? 'border-blue-500 bg-blue-50 text-blue-900'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <span className="font-medium mr-3">
-                      {String.fromCharCode(65 + index)}.
-                    </span>
-                    <span>{option}</span>
-                  </div>
-                </button>
-              ))}
+              {currentQ.isMultipleChoice && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Multiple Choice:</strong> Select all correct answers by clicking on them.
+                  </p>
+                </div>
+              )}
+              {currentQ.options.map((option, index) => {
+                const currentAnswer = selectedAnswers[currentQuestion];
+                const isSelected = Array.isArray(currentAnswer) 
+                  ? currentAnswer.includes(index)
+                  : currentAnswer === index;
+                
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleAnswerSelect(index)}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 text-blue-900'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <span className="font-medium mr-3">
+                        {String.fromCharCode(65 + index)}.
+                      </span>
+                      <span>{option}</span>
+                      {currentQ.isMultipleChoice && (
+                        <div className="ml-auto">
+                          {isSelected ? (
+                            <CheckSquare className="h-5 w-5 text-blue-600" />
+                          ) : (
+                            <div className="h-5 w-5 border-2 border-gray-300 rounded" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -432,9 +496,13 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
                     className={`w-8 h-8 rounded-full text-sm font-medium ${
                       index === currentQuestion
                         ? 'bg-blue-600 text-white'
-                        : selectedAnswers[index] !== -1
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
+                        : (() => {
+                            const answer = selectedAnswers[index];
+                            if (Array.isArray(answer)) {
+                              return answer.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
+                            }
+                            return answer !== -1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
+                          })()
                     }`}
                   >
                     {index + 1}
@@ -454,7 +522,13 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
               ) : (
                 <Button
                   onClick={handleNext}
-                  disabled={selectedAnswers[currentQuestion] === -1}
+                  disabled={(() => {
+                    const currentAnswer = selectedAnswers[currentQuestion];
+                    if (Array.isArray(currentAnswer)) {
+                      return currentAnswer.length === 0;
+                    }
+                    return currentAnswer === -1;
+                  })()}
                 >
                   Next
                 </Button>

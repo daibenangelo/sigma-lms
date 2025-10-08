@@ -14,14 +14,14 @@ export function Shell({ children }: ShellProps) {
 
   // Pages that should not show navbar and sidebar
   const standalonePages = [
-    "/csdp/courses",
     "/dashboard",
     "/profile"
   ];
 
   // Pages that should show navbar but not sidebar
   const navbarOnlyPages = [
-    "/programs"
+    "/programs",
+    "/csdp/courses"
   ];
 
   // Auth pages that should not show navbar and sidebar

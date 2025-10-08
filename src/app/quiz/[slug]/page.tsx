@@ -51,15 +51,26 @@ export default async function QuizPage({ params, searchParams }: any) {
   const questions = linkedQuestions.map((q: any, index: number) => {
     const answers: any[] = Array.isArray(q.fields?.answers) ? q.fields.answers : [];
     const options = answers.map((ans: any) => richTextToPlainText(ans.fields?.answer));
-    const correctIndex = Math.max(0, answers.findIndex((ans: any) => ans.fields?.isCorrect === true));
-    const explanation = richTextToPlainText(answers[correctIndex]?.fields?.explanation);
+    
+    // Find all correct answers
+    const correctIndices = answers
+      .map((ans: any, idx: number) => ans.fields?.isCorrect === true ? idx : -1)
+      .filter(idx => idx !== -1);
+    
+    const isMultipleChoice = correctIndices.length > 1;
+    const correctAnswer = isMultipleChoice ? correctIndices : correctIndices[0] || 0;
+    
+    // Get explanation from first correct answer
+    const firstCorrectAnswer = answers[correctIndices[0]];
+    const explanation = richTextToPlainText(firstCorrectAnswer?.fields?.explanation);
 
     return {
       id: `q${index}`,
       question: q.fields?.quesionText || q.fields?.questionText || '',
       options: options.length > 0 ? options : ['Answer A', 'Answer B', 'Answer C', 'Answer D'],
-      correctAnswer: correctIndex,
+      correctAnswer: correctAnswer,
       explanation: explanation || 'Explanation not available',
+      isMultipleChoice: isMultipleChoice,
     };
   });
 
