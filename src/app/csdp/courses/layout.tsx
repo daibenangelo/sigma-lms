@@ -20,7 +20,7 @@ interface Course {
 interface ContentItem {
   title: string;
   slug: string;
-  type: 'lesson' | 'quiz' | 'tutorial' | 'challenge';
+  type: 'lesson' | 'quiz' | 'tutorial' | 'challenge' | 'chapter';
 }
 
 interface CourseContent {
@@ -48,6 +48,9 @@ function FusedCourseContent({
   const searchParams = useSearchParams();
   const router = useRouter();
   const courseSlug = searchParams.get('course');
+  
+  // Get course progress for the selected course
+  const { progress: courseProgress, isItemViewed: dbIsItemViewed } = useCourseProgress(selectedCourse?.slug);
 
   // Fetch courses if not provided
   useEffect(() => {
@@ -116,25 +119,91 @@ function FusedCourseContent({
     router.push(href);
   };
 
-  // Get completion status for content items
+  // Get completion status for content items (matches sidebar logic)
   const getItemCompletionStatus = (itemSlug: string) => {
     if (!selectedCourse) return false;
     
-    // Check sessionStorage first (for immediate feedback)
+    // Check database progress first (same as sidebar)
+    const dbCompletedItems = courseProgress?.completed_items || [];
+    if (dbCompletedItems.includes(itemSlug)) {
+      return true;
+    }
+    
+    // Check course-specific sessionStorage (same as sidebar)
     if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('completedItems');
+      const storageKey = `completedItems_${selectedCourse.slug}`;
+      const stored = sessionStorage.getItem(storageKey);
       if (stored) {
         try {
           const completed = JSON.parse(stored);
           return completed.includes(itemSlug);
         } catch (e) {
-          console.warn('Failed to parse completed items from sessionStorage:', e);
+          console.warn(`Failed to parse completed items for course ${selectedCourse.slug}:`, e);
         }
       }
     }
     
     return false;
   };
+
+  // Get viewed status for content items (matches sidebar logic)
+  const getItemViewedStatus = (itemSlug: string) => {
+    if (!selectedCourse) return false;
+    
+    // Check database first
+    const dbViewed = dbIsItemViewed(itemSlug);
+    if (dbViewed) return true;
+    
+    // Fallback to sessionStorage
+    if (typeof window !== 'undefined') {
+      const storageKey = `viewedItems_${selectedCourse.slug}`;
+      const stored = sessionStorage.getItem(storageKey);
+      if (stored) {
+        try {
+          const viewed = JSON.parse(stored);
+          return viewed.includes(itemSlug);
+        } catch (e) {
+          console.warn(`Failed to parse viewed items for course ${selectedCourse.slug}:`, e);
+        }
+      }
+    }
+    
+    return false;
+  };
+
+  // Get status icon (matches sidebar getStatusIcon function)
+  const getStatusIcon = (itemSlug: string) => {
+    const isCompleted = getItemCompletionStatus(itemSlug);
+    const isViewed = getItemViewedStatus(itemSlug);
+
+    // Find the item to determine its type
+    const item = courseContent?.allContent.find(content => content.slug === itemSlug);
+    const isContentPage = item?.type === 'lesson' || item?.type === 'chapter';
+
+    if (isCompleted) {
+      return <div className="w-2 h-2 bg-green-500 rounded-full" title="Completed" />;
+    } else if (isContentPage && isViewed) {
+      // Content pages (lessons/chapters) show green only when viewed
+      return <div className="w-2 h-2 bg-green-500 rounded-full" title="Content viewed" />;
+    } else if (isViewed) {
+      return <div className="w-2 h-2 bg-blue-500 rounded-full" title="Viewed" />;
+    } else {
+      return <div className="w-2 h-2 bg-gray-300 rounded-full" title="Not viewed" />;
+    }
+  };
+
+  // Listen for progress updates to refresh the right panel
+  useEffect(() => {
+    const handleProgressUpdate = () => {
+      // Force re-render by updating a dummy state
+      setCourseContent(prev => prev ? { ...prev } : null);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('item-completed', handleProgressUpdate);
+      return () => window.removeEventListener('item-completed', handleProgressUpdate);
+    }
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -257,12 +326,8 @@ function FusedCourseContent({
                           </div>
                            <div className="flex items-center space-x-4">
                              <div className="flex items-center space-x-2">
-                               {/* Completion status indicator */}
-                               {getItemCompletionStatus(item.slug) ? (
-                                 <div className="w-2 h-2 bg-green-500 rounded-full" />
-                               ) : (
-                                 <div className="w-2 h-2 bg-gray-300 rounded-full" />
-                               )}
+                               {/* Status indicator (matches sidebar logic) */}
+                               {getStatusIcon(item.slug)}
                                <div className="flex items-center text-blue-600 font-medium group-hover:text-blue-700">
                                  Start
                                  <svg className="ml-2 h-4 w-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">

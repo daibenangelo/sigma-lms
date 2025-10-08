@@ -31,13 +31,66 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
   const [timeSpent, setTimeSpent] = useState<number>(0);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  
+  const [lastAttempt, setLastAttempt] = useState<{ score: number; total: number; percentage: number; passed: boolean; when?: string } | null>(null);
+  const [hasPerfectScore, setHasPerfectScore] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
   const { user } = useAuth();
 
   const currentQ = questions[currentQuestion];
   const isLastQuestion = currentQuestion === questions.length - 1;
   const isFirstQuestion = currentQuestion === 0;
   const allQuestionsAnswered = selectedAnswers.every(answer => answer !== -1);
+  // Load last attempt and check for perfect score on mount
+  useEffect(() => {
+    const loadLastAttempt = async () => {
+      try {
+        if (!quizSlug || typeof window === 'undefined') return;
+
+        // Check localStorage for perfect score and latest attempt
+        const keys = Object.keys(localStorage);
+        const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
+
+        let hasPerfect = false;
+        let latestAttempt = null;
+
+        for (const key of attemptKeys) {
+          try {
+            const attemptData = JSON.parse(localStorage.getItem(key) || '{}');
+            if (attemptData.score_percentage === 100 || attemptData.passed === true) {
+              hasPerfect = true;
+            }
+            // Keep track of the most recent attempt
+            if (!latestAttempt || new Date(attemptData.completed_at) > new Date(latestAttempt.completed_at)) {
+              latestAttempt = attemptData;
+            }
+          } catch (e) {
+            // Ignore malformed data
+          }
+        }
+
+        console.log('[StrictQuiz] Perfect score check:', { hasPerfect, attemptCount: attemptKeys.length });
+
+        setHasPerfectScore(hasPerfect);
+
+        if (latestAttempt) {
+          setLastAttempt({
+            score: latestAttempt.score ?? 0,
+            total: latestAttempt.total_questions ?? questions.length,
+            percentage: latestAttempt.score_percentage ?? 0,
+            passed: latestAttempt.passed ?? false,
+            when: latestAttempt.completed_at || undefined
+          });
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadLastAttempt();
+  }, [quizSlug, questions.length]);
+
 
   // Timer effect
   useEffect(() => {
@@ -81,6 +134,12 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
     setQuizState('submitted');
     setEndTime(new Date());
     await saveQuizResults();
+
+    // Dispatch custom event to notify other components that quiz is completed
+    if (typeof window !== 'undefined') {
+      console.log('[StrictQuiz] Dispatching quiz-completed event');
+      window.dispatchEvent(new CustomEvent('quiz-completed'));
+    }
   };
 
   const getScore = () => {
@@ -111,7 +170,7 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
     try {
       const score = getScore();
       const percentage = getScorePercentage();
-      const passed = percentage >= 70;
+      const passed = percentage === 100;
 
       // Prepare answers data with question details
       const answersData = questions.map((question, index) => ({
@@ -123,27 +182,61 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
         explanation: question.explanation
       }));
 
-      const { error } = await supabase
-        .from('user_quiz_attempts')
-        .insert({
-          user_id: user.id,
-          quiz_slug: quizSlug,
-          quiz_title: title,
+      // Prefer saving via API route (RLS-safe and SSR-aware)
+      const authHeader = (await supabase.auth.getSession()).data.session?.access_token
+        ? { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session!.access_token}` }
+        : {};
+      const apiRes = await fetch('/api/quiz-attempts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({
+          quizSlug,
+          quizTitle: title,
           answers: answersData,
-          score: score,
+          score,
+          totalQuestions: questions.length,
+          scorePercentage: percentage,
+          passed,
+          timeSpentSeconds: timeSpent,
+          completedAt: new Date().toISOString()
+        })
+      });
+
+      if (apiRes.ok) {
+        const body = await apiRes.json().catch(() => ({}));
+        if (!body?.ok) {
+          console.warn('Quiz results not stored in DB (but continuing):', body?.error);
+        } else {
+          console.log('Quiz results saved successfully via', body?.stored);
+        }
+
+        // If perfect score, mark item as completed in sidebar
+        if (percentage === 100 && typeof window !== 'undefined') {
+          // Dispatch event to mark item as completed in sidebar
+          window.dispatchEvent(new CustomEvent('item-completed', { detail: { slug: quizSlug } }));
+          console.log('[StrictQuiz] Perfect score achieved, marking item as completed');
+        }
+      } else {
+        console.warn('Quiz save HTTP failure (continuing UI flow)');
+      }
+
+      // Always persist latest attempt locally for UI display
+      try {
+        const localAttempt = {
+          score,
           total_questions: questions.length,
           score_percentage: percentage,
-          passed: passed,
-          time_spent_seconds: timeSpent,
+          passed,
           completed_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('Failed to save quiz results:', error);
-        setSaveError('Failed to save quiz results. Please try again.');
-      } else {
-        console.log('Quiz results saved successfully');
-      }
+        };
+        if (quizSlug) {
+          // Use timestamp-based key to create unique entries for counting attempts
+          const timestamp = Date.now();
+          localStorage.setItem(`quiz-${quizSlug}-${timestamp}`, JSON.stringify(localAttempt));
+          // Also update the "latest" key for easy access
+          localStorage.setItem(`quiz-last-${quizSlug}`, JSON.stringify(localAttempt));
+        }
+      } catch {}
     } catch (error) {
       console.error('Error saving quiz results:', error);
       setSaveError('An error occurred while saving quiz results.');
@@ -152,15 +245,97 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
     }
   };
 
+  // Show loading while checking for perfect score
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading quiz...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show explanations if user has already achieved perfect score
+  if (hasPerfectScore) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <h2 className="text-lg font-semibold text-green-800">Quiz Already Completed!</h2>
+          </div>
+          <p className="text-green-700 mb-4">
+            Congratulations! You've already achieved a perfect score on this quiz. Here are the correct answers and explanations:
+          </p>
+        </div>
+
+        {/* Quiz Review (showing all answers since they got perfect score) */}
+        <div className="space-y-8">
+          {questions.map((question, index) => {
+            const isCorrect = true; // Since they got perfect score, all answers are correct
+
+            return (
+              <div key={question.id} className="border border-gray-200 rounded-lg p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Question {index + 1}
+                  </h3>
+                  <div className="flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                    Correct
+                  </div>
+                </div>
+
+                <p className="text-gray-700 mb-4">{question.question}</p>
+
+                <div className="space-y-2 mb-4">
+                  {question.options.map((option, optionIndex) => {
+                    const isCorrectAnswer = question.correctAnswer === optionIndex;
+
+                    return (
+                      <div
+                        key={optionIndex}
+                        className={`p-3 rounded-lg border-2 ${
+                          isCorrectAnswer
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <span className="font-medium mr-3">
+                            {String.fromCharCode(65 + optionIndex)}.
+                          </span>
+                          <span className={isCorrectAnswer ? 'text-green-800 font-medium' : ''}>
+                            {option}
+                          </span>
+                          {isCorrectAnswer && (
+                            <CheckCircle className="h-5 w-5 text-green-600 ml-auto" />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
+                  <p className="text-blue-800">{question.explanation}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // Not started state
   if (quizState === 'not-started') {
     return (
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{title}</h1>
-            <p className="text-gray-600">Software Development Programme · Quiz</p>
-          </div>
+          {/* Removed redundant per-quiz title and subtitle (already shown on page header) */}
           
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-6">
             <h2 className="text-lg font-semibold text-blue-900 mb-4">Quiz Instructions</h2>
@@ -194,7 +369,6 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
           <div className="border-b border-gray-200 p-4">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-xl font-semibold">{title}</h1>
                 <p className="text-sm text-gray-600">
                   Question {currentQuestion + 1} of {questions.length}
                 </p>
@@ -296,7 +470,7 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
   if (quizState === 'submitted') {
     const score = getScore();
     const percentage = getScorePercentage();
-    const passed = percentage >= 70;
+    const passed = percentage === 100;
 
     return (
       <div className="max-w-4xl mx-auto p-6">
@@ -313,7 +487,7 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
                   <XCircle className="h-8 w-8 text-red-600" />
                 )}
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Quiz Completed!</h1>
+              {/* Removed redundant per-quiz title; main page already shows the quiz name */}
               <p className="text-gray-600 mb-4">
                 You scored {score} out of {questions.length} questions ({percentage}%)
               </p>
@@ -322,7 +496,7 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
                   ? 'bg-green-100 text-green-800' 
                   : 'bg-red-100 text-red-800'
               }`}>
-                {passed ? 'Passed' : 'Failed'} (70% required to pass)
+                {passed ? 'Passed' : 'Failed'} (100% required to pass)
               </div>
               
               {/* Save Status */}
@@ -344,75 +518,88 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
             </div>
           </div>
 
-          {/* Quiz Review */}
-          <div className="p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Quiz Review</h2>
-            <div className="space-y-8">
-              {questions.map((question, index) => {
-                const userAnswer = selectedAnswers[index];
-                const isCorrect = userAnswer === question.correctAnswer;
-                
-                return (
-                  <div key={question.id} className="border border-gray-200 rounded-lg p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Question {index + 1}
-                      </h3>
-                      <div className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        isCorrect 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {isCorrect ? 'Correct' : 'Incorrect'}
+          {/* Quiz Review (only when perfect score) */}
+          {passed ? (
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Quiz Review</h2>
+              <div className="space-y-8">
+                {questions.map((question, index) => {
+                  const userAnswer = selectedAnswers[index];
+                  const isCorrect = userAnswer === question.correctAnswer;
+
+                  return (
+                    <div key={question.id} className="border border-gray-200 rounded-lg p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">
+                          Question {index + 1}
+                        </h3>
+                        <div className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                          isCorrect 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {isCorrect ? 'Correct' : 'Incorrect'}
+                        </div>
+                      </div>
+
+                      <p className="text-gray-700 mb-4">{question.question}</p>
+
+                      <div className="space-y-2 mb-4">
+                        {question.options.map((option, optionIndex) => {
+                          const isUserAnswer = userAnswer === optionIndex;
+                          const isCorrectAnswer = question.correctAnswer === optionIndex;
+                          
+                          return (
+                            <div
+                              key={optionIndex}
+                              className={`p-3 rounded-lg border-2 ${
+                                isCorrectAnswer
+                                  ? 'border-green-500 bg-green-50'
+                                  : isUserAnswer && !isCorrectAnswer
+                                  ? 'border-red-500 bg-red-50'
+                                  : 'border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center">
+                                <span className="font-medium mr-3">
+                                  {String.fromCharCode(65 + optionIndex)}.
+                                </span>
+                                <span className={isCorrectAnswer ? 'text-green-800 font-medium' : ''}>
+                                  {option}
+                                </span>
+                                {isCorrectAnswer && (
+                                  <CheckCircle className="h-5 w-5 text-green-600 ml-auto" />
+                                )}
+                                {isUserAnswer && !isCorrectAnswer && (
+                                  <XCircle className="h-5 w-5 text-red-600 ml-auto" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
+                        <p className="text-blue-800">{question.explanation}</p>
                       </div>
                     </div>
-
-                    <p className="text-gray-700 mb-4">{question.question}</p>
-
-                    <div className="space-y-2 mb-4">
-                      {question.options.map((option, optionIndex) => {
-                        const isUserAnswer = userAnswer === optionIndex;
-                        const isCorrectAnswer = question.correctAnswer === optionIndex;
-                        
-                        return (
-                          <div
-                            key={optionIndex}
-                            className={`p-3 rounded-lg border-2 ${
-                              isCorrectAnswer
-                                ? 'border-green-500 bg-green-50'
-                                : isUserAnswer && !isCorrectAnswer
-                                ? 'border-red-500 bg-red-50'
-                                : 'border-gray-200'
-                            }`}
-                          >
-                            <div className="flex items-center">
-                              <span className="font-medium mr-3">
-                                {String.fromCharCode(65 + optionIndex)}.
-                              </span>
-                              <span className={isCorrectAnswer ? 'text-green-800 font-medium' : ''}>
-                                {option}
-                              </span>
-                              {isCorrectAnswer && (
-                                <CheckCircle className="h-5 w-5 text-green-600 ml-auto" />
-                              )}
-                              {isUserAnswer && !isCorrectAnswer && (
-                                <XCircle className="h-5 w-5 text-red-600 ml-auto" />
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
-                      <p className="text-blue-800">{question.explanation}</p>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="p-6">
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-4 mb-4">
+                To view the correct answers and explanations, you need a perfect score. Please retake the quiz.
+              </div>
+              <div className="text-center">
+                <Button onClick={handleStartQuiz} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Retake Quiz
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

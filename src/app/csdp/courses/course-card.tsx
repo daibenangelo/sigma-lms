@@ -26,10 +26,7 @@ interface CourseCardProps {
 export function CourseCard({ course, isSelected = false, onSelect, isCompact = false }: CourseCardProps) {
   const { progress } = useCourseProgress(course.slug);
   const [actualContentCount, setActualContentCount] = useState<number>(0);
-  
-  const hasProgress = progress && progress.completed_items && progress.completed_items.length > 0;
-  const buttonText = hasProgress ? "Continue" : "Start Learning";
-  
+
   // Fetch actual content count from API (same as sidebar)
   useEffect(() => {
     const fetchContentCount = async () => {
@@ -45,22 +42,58 @@ export function CourseCard({ course, isSelected = false, onSelect, isCompact = f
         setActualContentCount(course.chapters.length + course.quizCount + course.tutorialCount + course.challengeCount);
       }
     };
-    
+
     fetchContentCount();
   }, [course.slug, course.chapters.length, course.quizCount, course.tutorialCount, course.challengeCount]);
+
+  // Listen for progress updates and re-fetch content count
+  useEffect(() => {
+    const handleProgressUpdate = () => {
+      // Re-fetch content count when progress updates
+      const fetchContentCount = async () => {
+        try {
+          const response = await fetch(`/api/lessons?course=${course.slug}`);
+          const data = await response.json();
+          if (data && data.allContent) {
+            setActualContentCount(data.allContent.length);
+          }
+        } catch (error) {
+          console.error('Failed to fetch content count on progress update:', error);
+        }
+      };
+      fetchContentCount();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('item-completed', handleProgressUpdate);
+      return () => window.removeEventListener('item-completed', handleProgressUpdate);
+    }
+  }, [course.slug]);
   
-  const totalContent = actualContentCount || (course.chapters.length + course.quizCount + course.tutorialCount + course.challengeCount);
-  const completedCount = progress?.completed_items?.length || 0;
+  // Use the same total count as sidebar (content.length from lessons API)
+  const totalContent = actualContentCount;
+  // Use database progress if available, otherwise use sessionStorage fallback like sidebar
+  const dbCompletedCount = progress?.completed_items?.length || 0;
+  const sessionCompletedItems = typeof window !== 'undefined' ?
+    new Set(JSON.parse(sessionStorage.getItem(`completedItems_${course.slug}`) || '[]')) : new Set();
+  const sessionCompletedCount = sessionCompletedItems.size;
+  const completedCount = dbCompletedCount > 0 ? dbCompletedCount : sessionCompletedCount;
   const progressPercentage = totalContent > 0 ? Math.round((completedCount / totalContent) * 100) : 0;
+
+  // Check if there's any progress (database or sessionStorage)
+  const hasProgress = progressPercentage > 0;
+  const buttonText = hasProgress ? "Continue" : "Start Learning";
 
   // Debug logging
   console.log(`[CourseCard] ${course.slug}:`, {
     actualContentCount,
-    calculatedContent: course.chapters.length + course.quizCount + course.tutorialCount + course.challengeCount,
     totalContent,
+    dbCompletedCount,
+    sessionCompletedCount,
     completedCount,
     progressPercentage,
-    completedItems: progress?.completed_items
+    completedItems: progress?.completed_items,
+    sessionStorageItems: Array.from(sessionCompletedItems)
   });
 
   const cardContent = (

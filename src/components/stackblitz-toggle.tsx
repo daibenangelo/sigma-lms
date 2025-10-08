@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   ChevronUp,
@@ -14,6 +14,7 @@ import {
   CheckCircle as CheckCircleIcon
 } from "lucide-react";
 import StackBlitzSDK from '@stackblitz/sdk';
+import { supabase } from '@/lib/supabase';
 
 interface StackBlitzToggleProps {
   document?: any;
@@ -23,6 +24,7 @@ interface StackBlitzToggleProps {
 
 export function StackBlitzToggle({ document, className = "", testJS }: StackBlitzToggleProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [hasSnapshot, setHasSnapshot] = useState(false);
   const [stackblitzUrl, setStackblitzUrl] = useState<string>('');
@@ -205,7 +207,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
 
   // Embed StackBlitz project when URL is available and panel is open
   useEffect(() => {
-    if (stackblitzUrl && isOpen && !isEmbedded) {
+    if (stackblitzUrl && isOpen) {
       console.log('[StackBlitz] Embedding project with URL:', stackblitzUrl);
       
       try {
@@ -214,6 +216,15 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
         const projectId = url.pathname.split('/').pop() || 'default';
         
         console.log('[StackBlitz] Project ID:', projectId);
+        
+        // Clear the container before embedding
+        if (editorRef.current) {
+          editorRef.current.innerHTML = '';
+        }
+        
+        // Reset embedded state
+        setIsEmbedded(false);
+        setVm(null);
         
         // Embed the project using StackBlitz SDK
         const embedPromise = StackBlitzSDK.embedProjectId('stackblitz-editor', projectId, {
@@ -235,7 +246,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
         console.error('[StackBlitz] Error embedding project:', error);
       }
     }
-  }, [stackblitzUrl, isOpen, isEmbedded]);
+  }, [stackblitzUrl, isOpen]);
 
   // Save function using StackBlitz SDK getFsSnapshot() with proper VM instance
   const saveSnapshot = async () => {
@@ -587,6 +598,100 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                   const completedKey = `challenge-completed-${challengeSlug}`;
                   localStorage.setItem(completedKey, 'true');
                   setIsCompleted(true);
+
+                  // Persist to database per user and course
+                  try {
+                    const courseSlug = new URLSearchParams(window.location.search).get('course');
+                    if (courseSlug && challengeSlug) {
+                      const { data: userData } = await supabase.auth.getUser();
+                      const currentUser = userData?.user;
+                      if (currentUser) {
+                        const lessonsRes = await fetch(`/api/lessons?course=${encodeURIComponent(courseSlug)}`);
+                        const lessonsData = lessonsRes.ok ? await lessonsRes.json() : null;
+                        const totalItems = Array.isArray(lessonsData?.allContent) ? lessonsData.allContent.length : 0;
+
+                        const { data: existingProgress } = await supabase
+                          .from('user_progress')
+                          .select('*')
+                          .eq('user_id', currentUser.id)
+                          .eq('course_slug', courseSlug)
+                          .maybeSingle();
+
+                        const existingCompleted: string[] = Array.isArray(existingProgress?.completed_items) ? existingProgress!.completed_items : [];
+                        const updatedCompleted = existingCompleted.includes(challengeSlug) ? existingCompleted : [...existingCompleted, challengeSlug];
+                        const progressPercentage = totalItems > 0 ? Math.round((updatedCompleted.length / totalItems) * 100) : 0;
+
+                        // Prepare upsert data with fallback for missing viewed_items column
+                        const upsertData: any = {
+                          user_id: currentUser.id,
+                          course_slug: courseSlug,
+                          completed_items: updatedCompleted,
+                          progress_percentage: progressPercentage,
+                          last_updated: new Date().toISOString()
+                        };
+
+                        // Only include viewed_items if the column exists (from existing progress)
+                        if (existingProgress && 'viewed_items' in existingProgress) {
+                          upsertData.viewed_items = existingProgress.viewed_items || [];
+                        }
+
+                        let upsertErr = null;
+                        
+                        // Try upsert first
+                        const { error: upsertError } = await supabase
+                          .from('user_progress')
+                          .upsert(upsertData, {
+                            onConflict: 'user_id,course_slug'
+                          });
+                        
+                        upsertErr = upsertError;
+                        
+                        // If upsert fails, try insert
+                        if (upsertErr) {
+                          console.warn('[StackBlitz] Upsert failed, trying insert:', upsertErr);
+                          const { error: insertError } = await supabase
+                            .from('user_progress')
+                            .insert(upsertData);
+                          
+                          upsertErr = insertError;
+                        }
+
+                        if (upsertErr) {
+                          console.warn('[StackBlitz] Database save failed, using localStorage fallback:', upsertErr);
+                          
+                          // Fallback: Save to localStorage
+                          if (typeof window !== 'undefined') {
+                            const storageKey = `courseProgress_${currentUser.id}_${courseSlug}`;
+                            const existingStorage = localStorage.getItem(storageKey);
+                            let storageData = existingStorage ? JSON.parse(existingStorage) : { completed_items: [] };
+                            
+                            if (!storageData.completed_items.includes(challengeSlug)) {
+                              storageData.completed_items.push(challengeSlug);
+                              storageData.progress_percentage = progressPercentage;
+                              storageData.last_updated = new Date().toISOString();
+                              localStorage.setItem(storageKey, JSON.stringify(storageData));
+                              console.log('[StackBlitz] Saved challenge completion to localStorage as fallback');
+                            }
+                          }
+                        } else {
+                          console.log('[StackBlitz] Course progress updated for challenge completion');
+                        }
+                        
+                        // Dispatch event and reload regardless of database success
+                        if (typeof window !== 'undefined') {
+                          window.dispatchEvent(new CustomEvent('item-completed', { detail: { slug: challengeSlug } }));
+                          console.log('[StackBlitz] Challenge completed, dispatching item-completed event');
+                          
+                          // Reload the page to show updated completion status
+                          setTimeout(() => {
+                            window.location.reload();
+                          }, 1000); // Small delay to ensure event is processed
+                        }
+                      }
+                    }
+                  } catch (dbErr) {
+                    console.error('[StackBlitz] Error persisting challenge completion:', dbErr);
+                  }
                 }
               } catch (testError) {
                 const err = testError as Error;
@@ -735,6 +840,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
             {/* StackBlitz Editor */}
             <div className="flex-1 relative">
               <div 
+                ref={editorRef}
                 id="stackblitz-editor" 
                 className="w-full h-full"
                 style={{ minHeight: '300px' }}

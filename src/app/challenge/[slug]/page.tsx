@@ -120,9 +120,9 @@ export default async function ChallengePage({ params, searchParams }: { params: 
 
   return (
     <div className="max-w-4xl mx-auto">
-      <CompletionIndicator type="challenge" slug={slug} />
       <h1 className="text-3xl font-bold mb-2">{fields.title}</h1>
-      <p className="text-gray-600 mb-6">Software Development Programme · Challenge</p>
+      <p className="text-gray-600 mb-2">Software Development Programme · Challenge</p>
+      <CompletionIndicator type="challenge" slug={slug} />
       
       {/* Preview Section */}
       {fields.preview && (

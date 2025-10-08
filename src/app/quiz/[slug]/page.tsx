@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getEntriesByContentType } from "@/lib/contentful";
 import { StrictQuiz } from "@/components/strict-quiz";
+import QuizLastScore from "@/components/quiz-last-score";
 import CompletionIndicator from "@/components/CompletionIndicator";
 
 // Helper function to convert rich text to plain text
@@ -66,9 +67,11 @@ export default async function QuizPage({ params, searchParams }: any) {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <CompletionIndicator type="quiz" slug={slug} course={course} />
       <h1 className="text-3xl font-bold mb-2">{title}</h1>
-      <p className="text-gray-600 mb-6">Software Development Programme · Course</p>
+      <p className="text-gray-600 mb-4">Software Development Programme · Course</p>
+      <CompletionIndicator type="quiz" slug={slug} course={course} />
+      <QuizLastScore quizSlug={slug} />
+      <div className="h-2" />
       {questions.length > 0 ? (
         <StrictQuiz questions={questions} title={title} quizSlug={slug} />
       ) : (

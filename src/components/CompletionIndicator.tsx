@@ -13,43 +13,59 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
   const [completed, setCompleted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        if (type === "challenge") {
-          const key = `challenge-completed-${slug}`;
-          const ok = typeof window !== "undefined" && localStorage.getItem(key) === "true";
-          setCompleted(!!ok);
-          setLoading(false);
-          return;
-        }
-
-        // quiz
-        if (!course) {
-          setCompleted(false);
-          setLoading(false);
-          return;
-        }
-        const res = await fetch(`/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`);
-        if (!res.ok) {
-          setCompleted(false);
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        const hasPerfect = Array.isArray(data.attempts)
-          ? data.attempts.some((a: any) => a?.score_percentage === 100)
-          : !!data.hasPerfectScore;
-        setCompleted(hasPerfect);
-      } catch {
-        setCompleted(false);
-      } finally {
+  const checkStatus = async () => {
+    try {
+      if (type === "challenge") {
+        const key = `challenge-completed-${slug}`;
+        const ok = typeof window !== "undefined" && localStorage.getItem(key) === "true";
+        setCompleted(!!ok);
         setLoading(false);
+        return;
+      }
+
+      // quiz
+      if (!course) {
+        setCompleted(false);
+        setLoading(false);
+        return;
+      }
+      const res = await fetch(`/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`);
+      if (!res.ok) {
+        setCompleted(false);
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      const hasPerfect = Array.isArray(data.attempts)
+        ? data.attempts.some((a: any) => a?.score_percentage === 100)
+        : !!data.hasPerfectScore;
+      setCompleted(hasPerfect);
+    } catch {
+      setCompleted(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    checkStatus();
+  }, [type, slug, course]);
+
+  // Listen for completion events to refresh status
+  useEffect(() => {
+    const handleItemCompleted = (event: any) => {
+      const { slug: eventSlug } = event.detail;
+      if (eventSlug === slug) {
+        console.log('[CompletionIndicator] Received item-completed event for:', slug);
+        checkStatus();
       }
     };
 
-    checkStatus();
-  }, [type, slug, course]);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('item-completed', handleItemCompleted);
+      return () => window.removeEventListener('item-completed', handleItemCompleted);
+    }
+  }, [slug]);
 
   if (loading) return null;
 

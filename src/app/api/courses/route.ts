@@ -4,8 +4,8 @@ import { CourseFields } from "@/lib/contentful-types";
 import { unstable_cache } from 'next/cache';
 
 // Cached function to get course content counts
-const getCachedCourseContent = unstable_cache(
-  async (courseSlug: string) => {
+const getCachedCourseContent = (courseSlug: string) => unstable_cache(
+  async () => {
     try {
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       const response = await fetch(`${baseUrl}/api/lessons?course=${courseSlug}`, {
@@ -27,21 +27,28 @@ const getCachedCourseContent = unstable_cache(
       return { quizCount: 0, tutorialCount: 0, challengeCount: 0 };
     }
   },
-  ['course-content'],
+  ['course-content', courseSlug],
   {
-    tags: ['course-content'],
+    tags: ['course-content', `course-content-${courseSlug}`],
     revalidate: 300 // 5 minutes
   }
-);
+)();
 
 // Cached function to get all courses
 const getCachedCourses = unstable_cache(
   async () => {
     const courses = await getEntriesByContentType<CourseFields>("course");
-    
+
+    // Sort courses by creation date (oldest first) before transformation
+    const sortedCourses = courses.sort((a, b) => {
+      const dateA = new Date(a.sys.createdAt);
+      const dateB = new Date(b.sys.createdAt);
+      return dateA.getTime() - dateB.getTime(); // Oldest first
+    });
+
     // Transform the data and get content counts for each course
     const transformedCourses = await Promise.all(
-      courses.map(async (course) => {
+      sortedCourses.map(async (course) => {
         const courseSlug = course.fields.slug;
         if (!courseSlug || typeof courseSlug !== 'string') {
           return {
@@ -70,8 +77,7 @@ const getCachedCourses = unstable_cache(
       })
     );
 
-    // Sort courses in reverse order (newest first)
-    return transformedCourses.reverse();
+    return transformedCourses;
   },
   ['courses'],
   {
@@ -82,8 +88,8 @@ const getCachedCourses = unstable_cache(
 
 export async function GET() {
   try {
-    const sortedCourses = await getCachedCourses();
-    return NextResponse.json(sortedCourses);
+    const courses = await getCachedCourses();
+    return NextResponse.json(courses);
   } catch (error) {
     console.error("Error fetching courses:", error);
     return NextResponse.json(

@@ -1,10 +1,97 @@
 ﻿"use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { User, Mail, Calendar } from "lucide-react";
+import { User, Mail, Calendar, BookOpen, Trophy, Target, TrendingUp } from "lucide-react";
+import { useEffect, useState } from "react";
+
+interface CourseProgress {
+  id: string;
+  title: string;
+  slug: string;
+  chapters: number;
+  quizCount: number;
+  tutorialCount: number;
+  challengeCount: number;
+  progressPercentage: number;
+  completedCount: number;
+  viewedCount: number;
+}
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
+  const [courses, setCourses] = useState<CourseProgress[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(true);
+
+  useEffect(() => {
+    const fetchProgressData = async () => {
+      try {
+        // Fetch all courses
+        const coursesRes = await fetch('/api/courses');
+        if (coursesRes.ok) {
+          const coursesData = await coursesRes.json();
+
+          // For each course, fetch detailed progress data
+          const coursesWithProgress = await Promise.all(
+            coursesData.map(async (course: any) => {
+              try {
+                // Fetch lessons to get content counts and progress
+                const lessonsRes = await fetch(`/api/lessons?course=${course.slug}`);
+                if (lessonsRes.ok) {
+                  const lessonsData = await lessonsRes.json();
+
+                  // Calculate viewed and completed counts from localStorage
+                  const viewedKeys = Object.keys(localStorage).filter(key =>
+                    key.startsWith(`viewedItems_${course.slug}`)
+                  );
+                  const completedKeys = Object.keys(localStorage).filter(key =>
+                    key.startsWith(`completedItems_${course.slug}`)
+                  );
+
+                  return {
+                    id: course.id,
+                    title: course.title,
+                    slug: course.slug,
+                    chapters: course.chapters?.length || 0,
+                    quizCount: course.quizCount || 0,
+                    tutorialCount: course.tutorialCount || 0,
+                    challengeCount: course.challengeCount || 0,
+                    progressPercentage: course.progressPercentage || 0,
+                    completedCount: completedKeys.length,
+                    viewedCount: viewedKeys.length
+                  };
+                }
+              } catch (error) {
+                console.error(`Error fetching progress for course ${course.slug}:`, error);
+              }
+
+              return {
+                id: course.id,
+                title: course.title,
+                slug: course.slug,
+                chapters: course.chapters?.length || 0,
+                quizCount: course.quizCount || 0,
+                tutorialCount: course.tutorialCount || 0,
+                challengeCount: course.challengeCount || 0,
+                progressPercentage: 0,
+                completedCount: 0,
+                viewedCount: 0
+              };
+            })
+          );
+
+          setCourses(coursesWithProgress);
+        }
+      } catch (error) {
+        console.error('Error fetching progress data:', error);
+      } finally {
+        setIsLoadingCourses(false);
+      }
+    };
+
+    if (user) {
+      fetchProgressData();
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -61,78 +148,136 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Certifications */}
+      {/* Progress Summary */}
       <div className="space-y-6">
+        {/* Overall Statistics */}
         <div className="rounded-lg bg-white border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">freeCodeCamp Certifications</h2>
-          <div className="space-y-3">
-            <button className="w-full text-left p-4 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors">
-              <span className="text-gray-900 font-medium">View Responsive Web Design Certification</span>
-            </button>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Learning Progress Overview
+          </h2>
+
+          {isLoadingCourses ? (
+            <div className="animate-pulse space-y-4">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Total Items */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <BookOpen className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-blue-600 font-medium">Total Items</p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {courses.reduce((sum, course) => sum + course.chapters + course.quizCount + course.tutorialCount + course.challengeCount, 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Completed Items */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <Trophy className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-green-600 font-medium">Completed</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {courses.reduce((sum, course) => sum + course.completedCount, 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Viewed Items */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <Target className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-purple-600 font-medium">Viewed</p>
+                    <p className="text-2xl font-bold text-purple-900">
+                      {courses.reduce((sum, course) => sum + course.viewedCount, 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* Course Progress Details */}
         <div className="rounded-lg bg-white border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Legacy Certifications</h2>
-          <div className="space-y-3">
-            <button className="w-full text-left p-4 rounded-lg border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors">
-              <span className="text-gray-900 font-medium">View Legacy JavaScript Algorithms and Data Structures Certification</span>
-            </button>
-          </div>
-        </div>
-      </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Course Progress</h2>
 
-      {/* Timeline */}
-      <div className="rounded-lg bg-white border border-gray-200 p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Timeline</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Challenge</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Solution</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Completed</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-3 px-4">
-                  <a href="#" className="text-blue-600 hover:text-blue-800 underline">
-                    Build a Curriculum Outline - Step 1
-                  </a>
-                </td>
-                <td className="py-3 px-4 text-gray-500">-</td>
-                <td className="py-3 px-4 text-gray-600">Sep 12, 2025</td>
-              </tr>
-              <tr className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-3 px-4">
-                  <a href="#" className="text-blue-600 hover:text-blue-800 underline">
-                    Introduction: Elements of Python
-                  </a>
-                </td>
-                <td className="py-3 px-4 text-gray-500">-</td>
-                <td className="py-3 px-4 text-gray-600">Jul 10, 2020</td>
-              </tr>
-              <tr className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-3 px-4">
-                  <a href="#" className="text-blue-600 hover:text-blue-800 underline">
-                    Iterations: Definite Loops
-                  </a>
-                </td>
-                <td className="py-3 px-4 text-gray-500">-</td>
-                <td className="py-3 px-4 text-gray-600">Jul 10, 2020</td>
-              </tr>
-              <tr className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-3 px-4">
-                  <a href="#" className="text-blue-600 hover:text-blue-800 underline">
-                    Python Functions
-                  </a>
-                </td>
-                <td className="py-3 px-4 text-gray-500">-</td>
-                <td className="py-3 px-4 text-gray-600">Jul 10, 2020</td>
-              </tr>
-            </tbody>
-          </table>
+          {isLoadingCourses ? (
+            <div className="animate-pulse space-y-4">
+              <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+              <div className="h-4 bg-gray-200 rounded w-full"></div>
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+            </div>
+          ) : courses.length === 0 ? (
+            <div className="text-center py-8">
+              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500">No courses available yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {courses.map((course) => {
+                const totalItems = course.chapters + course.quizCount + course.tutorialCount + course.challengeCount;
+
+                return (
+                  <div key={course.id} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900">{course.title}</h3>
+                      <span className="text-sm text-gray-600">
+                        {course.completedCount}/{totalItems} completed
+                      </span>
+                    </div>
+
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-gray-600">Progress</span>
+                        <span className="font-medium">{course.progressPercentage}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${course.progressPercentage}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="w-4 h-4 text-blue-500" />
+                        <span className="text-gray-600">{course.chapters} chapters</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Trophy className="w-4 h-4 text-green-500" />
+                        <span className="text-gray-600">{course.quizCount} quizzes</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Target className="w-4 h-4 text-purple-500" />
+                        <span className="text-gray-600">{course.tutorialCount} tutorials</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-orange-500" />
+                        <span className="text-gray-600">{course.challengeCount} challenges</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

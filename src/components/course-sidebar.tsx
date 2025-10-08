@@ -25,7 +25,7 @@ import { useCourseProgress } from "@/hooks/use-course-progress";
 type ContentItem = {
   title: string;
   slug: string;
-  type: 'lesson' | 'quiz' | 'module-quiz' | 'tutorial' | 'challenge';
+  type: 'lesson' | 'quiz' | 'module-quiz' | 'tutorial' | 'challenge' | 'chapter';
 };
 
 export function CourseSidebar() {
@@ -35,6 +35,7 @@ export function CourseSidebar() {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(320);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
+  const [viewedItems, setViewedItems] = useState<Set<string>>(new Set());
   const isResizingRef = useRef<boolean>(false);
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(320);
@@ -53,26 +54,46 @@ export function CourseSidebar() {
   const { 
     progress, 
     markItemCompleted, 
+    markItemViewed,
     isItemCompleted, 
+    isItemViewed,
     saveProgress 
   } = useCourseProgress(currentCourse);
 
   // Calculate progress - prioritize database progress, use sessionStorage as fallback
   const dbCompletedCount = progress?.completed_items?.length || 0;
+  const dbViewedCount = progress?.viewed_items?.length || 0;
   const sessionCompletedCount = completedItems.size;
-  
+  const sessionViewedCount = viewedItems.size;
+
   // Use database progress if available, otherwise use sessionStorage
   const completedCount = dbCompletedCount > 0 ? dbCompletedCount : sessionCompletedCount;
-  
+  const viewedCount = dbViewedCount > 0 ? dbViewedCount : sessionViewedCount;
+
+  // Count content pages (lessons/chapters) as viewed since they don't need completion
+  const contentPages = content.filter(item => item.type === 'lesson' || item.type === 'chapter');
+  const contentPagesViewed = contentPages.filter(item => {
+    const isViewed = isItemViewed(item.slug) || viewedItems.has(item.slug);
+    return isViewed;
+  }).length;
+
   // Use the actual content length as total count
   const totalCount = content.length;
-  const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  
+  // Progress includes both completed items and viewed content pages
+  const effectiveProgressCount = completedCount + contentPagesViewed;
+  const progressPercentage = totalCount > 0 ? Math.round((effectiveProgressCount / totalCount) * 100) : 0;
   
   console.log("[sidebar] Progress calculation:", {
     currentCourse,
     dbCompletedCount,
     sessionCompletedCount,
+    sessionViewedCount,
     completedCount,
+    viewedCount,
+    contentPagesCount: contentPages.length,
+    contentPagesViewed,
+    effectiveProgressCount,
     totalCount,
     progressPercentage,
     contentLength: content.length,
@@ -99,50 +120,73 @@ export function CourseSidebar() {
     };
   }, []);
 
-  // Load completed items from sessionStorage for current course
-  useEffect(() => {
-    if (!currentCourse) {
-      setCompletedItems(new Set());
-      return;
-    }
-    
-    const storageKey = `completedItems_${currentCourse}`;
-    const stored = sessionStorage.getItem(storageKey);
-    if (stored) {
-      try {
-        const completed = JSON.parse(stored);
-        setCompletedItems(new Set(completed));
-        console.log(`[sidebar] Loaded completed items for course ${currentCourse}:`, completed);
-      } catch (e) {
-        console.warn(`[sidebar] Failed to parse completed items for course ${currentCourse}:`, e);
-        setCompletedItems(new Set());
-      }
-    } else {
-      setCompletedItems(new Set());
-    }
-  }, [currentCourse]);
+      // Load completed items from sessionStorage for current course
+      useEffect(() => {
+        if (!currentCourse) {
+          setCompletedItems(new Set());
+          setViewedItems(new Set());
+          return;
+        }
 
-  // Track current page as completed
+        const completedStorageKey = `completedItems_${currentCourse}`;
+        const viewedStorageKey = `viewedItems_${currentCourse}`;
+
+        const storedCompleted = sessionStorage.getItem(completedStorageKey);
+        const storedViewed = sessionStorage.getItem(viewedStorageKey);
+
+        if (storedCompleted) {
+          try {
+            const completed = JSON.parse(storedCompleted);
+            setCompletedItems(new Set(completed));
+            console.log(`[sidebar] Loaded completed items for course ${currentCourse}:`, completed);
+          } catch (e) {
+            console.warn(`[sidebar] Failed to parse completed items for course ${currentCourse}:`, e);
+            setCompletedItems(new Set());
+          }
+        } else {
+          setCompletedItems(new Set());
+        }
+
+        if (storedViewed) {
+          try {
+            const viewed = JSON.parse(storedViewed);
+            setViewedItems(new Set(viewed));
+            console.log(`[sidebar] Loaded viewed items for course ${currentCourse}:`, viewed);
+          } catch (e) {
+            console.warn(`[sidebar] Failed to parse viewed items for course ${currentCourse}:`, e);
+            setViewedItems(new Set());
+          }
+        } else {
+          setViewedItems(new Set());
+        }
+      }, [currentCourse]);
+
+  // Track current page as viewed (only mark as viewed when visiting, not completed)
   useEffect(() => {
     const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
     if (currentSlug && totalCount > 0 && currentCourse) {
-      // Update sessionStorage for current course
-      setCompletedItems(prevCompleted => {
-        if (!prevCompleted.has(currentSlug)) {
-          const newCompleted = new Set(prevCompleted);
-          newCompleted.add(currentSlug);
-          const storageKey = `completedItems_${currentCourse}`;
-          sessionStorage.setItem(storageKey, JSON.stringify([...newCompleted]));
-          console.log(`[sidebar] Marked ${currentSlug} as completed for course ${currentCourse}`);
-          return newCompleted;
-        }
-        return prevCompleted;
-      });
+      // Check if already viewed in database
+      const isAlreadyViewed = isItemViewed(currentSlug);
       
-      // Update database
-      markItemCompleted(currentSlug, totalCount);
+      if (!isAlreadyViewed) {
+        // Mark as viewed in database
+        markItemViewed(currentSlug, totalCount);
+        
+        // Also update sessionStorage for immediate UI feedback
+        setViewedItems(prevViewed => {
+          if (!prevViewed.has(currentSlug)) {
+            const newViewed = new Set(prevViewed);
+            newViewed.add(currentSlug);
+            const viewedStorageKey = `viewedItems_${currentCourse}`;
+            sessionStorage.setItem(viewedStorageKey, JSON.stringify([...newViewed]));
+            console.log(`[sidebar] Marked ${currentSlug} as viewed for course ${currentCourse} (database + sessionStorage)`);
+            return newViewed;
+          }
+          return prevViewed;
+        });
+      }
     }
-  }, [pathname, totalCount, markItemCompleted, currentCourse]);
+  }, [pathname, currentCourse, totalCount, isItemViewed, markItemViewed]);
 
 
   // Fetch content when pathname changes
@@ -206,13 +250,58 @@ export function CourseSidebar() {
     }
   };
 
+  // Function to mark an item as completed (called when requirements are met)
+  const markItemAsCompleted = (slug: string) => {
+    if (!currentCourse) return;
+
+    setCompletedItems(prevCompleted => {
+      if (!prevCompleted.has(slug)) {
+        const newCompleted = new Set(prevCompleted);
+        newCompleted.add(slug);
+        const storageKey = `completedItems_${currentCourse}`;
+        sessionStorage.setItem(storageKey, JSON.stringify([...newCompleted]));
+        console.log(`[sidebar] Marked ${slug} as completed for course ${currentCourse}`);
+        return newCompleted;
+      }
+      return prevCompleted;
+    });
+
+    // Update database
+    markItemCompleted(slug, totalCount);
+  };
+
+  // Listen for completion events
+  useEffect(() => {
+    const handleItemCompleted = (event: any) => {
+      const { slug } = event.detail;
+      console.log('[CourseSidebar] Received item-completed event for slug:', slug);
+      markItemAsCompleted(slug);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('item-completed', handleItemCompleted);
+      return () => window.removeEventListener('item-completed', handleItemCompleted);
+    }
+  }, [currentCourse]);
+
   const getStatusIcon = (slug: string) => {
     const isCompleted = isItemCompleted(slug) || completedItems.has(slug);
-    return isCompleted ? (
-      <div className="w-2 h-2 bg-green-500 rounded-full" />
-    ) : (
-      <div className="w-2 h-2 bg-gray-300 rounded-full" />
-    );
+    const isViewed = isItemViewed(slug) || viewedItems.has(slug);
+
+    // Find the item to determine its type
+    const item = content.find((contentItem: any) => contentItem.slug === slug);
+    const isContentPage = item?.type === 'lesson' || item?.type === 'chapter';
+
+    if (isCompleted) {
+      return <div className="w-2 h-2 bg-green-500 rounded-full" title="Completed" />;
+    } else if (isContentPage && isViewed) {
+      // Content pages (lessons/chapters) show green only when viewed
+      return <div className="w-2 h-2 bg-green-500 rounded-full" title="Content viewed" />;
+    } else if (isViewed) {
+      return <div className="w-2 h-2 bg-blue-500 rounded-full" title="Viewed" />;
+    } else {
+      return <div className="w-2 h-2 bg-gray-300 rounded-full" title="Not viewed" />;
+    }
   };
 
   return (
@@ -234,26 +323,26 @@ export function CourseSidebar() {
           </Button>
         </div>
         
-        {/* Progress Counter */}
-        {totalCount > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-blue-900">Progress</span>
-              <span className="text-sm font-bold text-blue-700">
-                {completedCount}/{totalCount}
-              </span>
-            </div>
-            <div className="w-full bg-blue-200 rounded-full h-2">
-              <div 
-                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-            <div className="text-xs text-blue-700 mt-1">
-              {progressPercentage}% Complete
-            </div>
-          </div>
-        )}
+            {/* Progress Counter */}
+            {totalCount > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-blue-900">Progress</span>
+                  <span className="text-sm font-bold text-blue-700">
+                    {effectiveProgressCount}/{totalCount} completed
+                  </span>
+                </div>
+                <div className="w-full bg-blue-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progressPercentage}%` }}
+                  />
+                </div>
+                <div className="text-xs text-blue-700 mt-1">
+                  {progressPercentage}% Complete · {viewedCount} viewed
+                </div>
+              </div>
+            )}
       </div>
 
       {/* Content */}
