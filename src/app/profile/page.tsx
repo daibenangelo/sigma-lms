@@ -40,12 +40,12 @@ export default function ProfilePage() {
                   const lessonsData = await lessonsRes.json();
 
                   // Calculate viewed and completed counts from user-specific localStorage
-                  const viewedKeys = Object.keys(localStorage).filter(key =>
+                  const viewedKeys = user ? Object.keys(localStorage).filter(key =>
                     key.startsWith(`viewedItems_${user.id}_${course.slug}`)
-                  );
-                  const completedKeys = Object.keys(localStorage).filter(key =>
+                  ) : [];
+                  const completedKeys = user ? Object.keys(localStorage).filter(key =>
                     key.startsWith(`completedItems_${user.id}_${course.slug}`)
-                  );
+                  ) : [];
 
                   return {
                     id: course.id,

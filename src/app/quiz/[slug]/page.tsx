@@ -77,7 +77,7 @@ export default async function QuizPage({ params, searchParams }: any) {
   const title = (chapterQuiz.fields as any)?.title || 'Quiz';
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-[30vh]">
       <h1 className="text-3xl font-bold mb-2">{title}</h1>
       <p className="text-gray-600 mb-4">Software Development Programme · Course</p>
       <CompletionIndicator type="quiz" slug={slug} course={course} />

@@ -224,12 +224,16 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
       }));
 
       // Prefer saving via API route (RLS-safe and SSR-aware)
-      const authHeader = (await supabase.auth.getSession()).data.session?.access_token
-        ? { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session!.access_token}` }
-        : {};
+      const session = (await supabase.auth.getSession()).data.session;
+      const authHeader = session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : undefined;
       const apiRes = await fetch('/api/quiz-attempts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authHeader || {})
+        },
         body: JSON.stringify({
           quizSlug,
           quizTitle: title,

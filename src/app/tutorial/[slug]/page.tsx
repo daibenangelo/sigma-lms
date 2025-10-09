@@ -34,7 +34,7 @@ export default async function TutorialPage({ params }: Params) {
   const sectionSolution = fields.fullCodeSolution;
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-[30vh]">
       <h1 className="text-3xl font-bold mb-2">{fields.topic}</h1>
       <p className="text-gray-600 mb-6">Software Development Programme · Tutorial</p>
       {sectionPreview && (

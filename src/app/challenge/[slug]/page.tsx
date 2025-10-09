@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { RichText } from "@/components/rich-text";
 import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 import { getEntriesByContentType } from "@/lib/contentful";
-import { getCachedLessons } from "@/lib/server-cache";
 import CompletionIndicator from "@/components/CompletionIndicator";
 
 type Params = {
@@ -13,97 +12,46 @@ export default async function ChallengePage({ params, searchParams }: { params: 
   const { slug } = await params;
   const { course } = await searchParams;
   
-  // Fetch challenge data from Contentful using the lessons API
+  console.log('[challenge] DEBUG - Starting challenge page for slug:', slug);
+  console.log('[challenge] DEBUG - Course param:', course);
+  
+  // Fetch challenge data directly from Contentful (bypass API route)
   let challengeData: any = null;
   try {
-    // Get the course from URL params or use a default
-    const courseSlug = typeof course === 'string' ? course : 'html';
-    console.log('[challenge] Using course slug:', courseSlug, 'for challenge slug:', slug);
+    // Try different content types for challenges
+    const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment', 'project'];
+    let challengeEntry = null;
     
-    const data = await getCachedLessons(courseSlug);
+    for (const contentType of challengeContentTypes) {
+      try {
+        console.log(`[challenge] DEBUG - Trying content type: ${contentType}`);
+        const entries = await getEntriesByContentType(contentType, {
+          limit: 1,
+          "fields.slug": slug,
+          include: 10
+        });
+        
+        console.log(`[challenge] DEBUG - ${contentType} returned ${entries?.length || 0} entries`);
+        
+        if (entries && entries.length > 0) {
+          challengeEntry = entries[0];
+          console.log(`[challenge] DEBUG - Found challenge in content type: ${contentType}, title: ${challengeEntry.fields?.title}`);
+          break;
+        }
+      } catch (e) {
+        console.error(`[challenge] DEBUG - Failed to fetch from ${contentType}:`, e);
+      }
+    }
     
-    // Find the challenge in the allContent array
-    const challenge = data.allContent?.find((item: any) => 
-      item.slug === slug && item.type === 'challenge'
-    );
-    
-    console.log('[challenge] Found challenge:', challenge?.title, 'in course:', courseSlug);
-    console.log('[challenge] Available challenges:', data.allContent?.filter((item: any) => item.type === 'challenge').map((item: any) => item.slug));
-    
-    if (!challenge) {
-      console.error('[challenge] Challenge not found for slug:', slug);
+    if (challengeEntry) {
+      challengeData = challengeEntry;
+      console.log('[challenge] DEBUG - Successfully fetched challenge data:', challengeData.fields?.title);
+    } else {
+      console.error('[challenge] DEBUG - No challenge found in any content type for slug:', slug);
       notFound();
     }
-    
-    // Now fetch the actual challenge data directly from Contentful
-    try {
-      console.log('[challenge] Fetching challenge data from Contentful for slug:', slug);
-      
-      // Try different content types for challenges
-      const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment', 'project'];
-      let challengeEntry = null;
-      
-      for (const contentType of challengeContentTypes) {
-        try {
-          const entries = await getEntriesByContentType(contentType, {
-            limit: 1,
-            "fields.slug": slug,
-            include: 10
-          });
-          
-          if (entries && entries.length > 0) {
-            challengeEntry = entries[0];
-            console.log(`[challenge] Found challenge in content type: ${contentType}`);
-            break;
-          }
-        } catch (e) {
-          console.warn(`[challenge] Failed to fetch from ${contentType}:`, e);
-        }
-      }
-      
-      if (challengeEntry) {
-        challengeData = challengeEntry;
-        console.log('[challenge] Fetched challenge data:', challengeData.fields?.title);
-      } else {
-        console.warn('[challenge] No challenge found in Contentful, using fallback');
-        // Fallback: create a basic structure with the title we found
-        challengeData = {
-          fields: {
-            title: challenge.title,
-            fullCodeSolution: {
-              nodeType: 'document',
-              content: [{
-                nodeType: 'paragraph',
-                content: [{
-                  nodeType: 'text',
-                  value: 'https://stackblitz.com/edit/web-platform-example'
-                }]
-              }]
-            }
-          }
-        };
-      }
-    } catch (contentfulError) {
-      console.error('[challenge] Contentful error:', contentfulError);
-      // Fallback: create a basic structure with the title we found
-      challengeData = {
-        fields: {
-          title: challenge.title,
-          fullCodeSolution: {
-            nodeType: 'document',
-            content: [{
-              nodeType: 'paragraph',
-              content: [{
-                nodeType: 'text',
-                value: 'https://stackblitz.com/edit/web-platform-example'
-              }]
-            }]
-          }
-        }
-      };
-    }
   } catch (e) {
-    console.error("Failed to fetch challenge data:", e);
+    console.error("[challenge] DEBUG - Failed to fetch challenge data:", e);
     notFound();
   }
 
@@ -119,7 +67,7 @@ export default async function ChallengePage({ params, searchParams }: { params: 
   const testJS = fields.testJS;
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto pb-[30vh]">
       <h1 className="text-3xl font-bold mb-2">{fields.title}</h1>
       <p className="text-gray-600 mb-2">Software Development Programme · Challenge</p>
       <CompletionIndicator type="challenge" slug={slug} />
