@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Code, ExternalLink, Save } from "lucide-react";
+import { X, Code, ExternalLink, Save, Play } from "lucide-react";
 
 interface CodeMirrorEditorProps {
   initialCode?: string;
@@ -11,17 +11,18 @@ interface CodeMirrorEditorProps {
   challengeId?: string;
 }
 
-export function CodeMirrorEditor({ 
-  initialCode = '', 
-  language = 'html', 
-  course, 
-  challengeId 
+export function CodeMirrorEditor({
+  initialCode = '',
+  language = 'html',
+  course,
+  challengeId
 }: CodeMirrorEditorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [code, setCode] = useState(initialCode);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [runMessage, setRunMessage] = useState<string | null>(null);
   const editorRef = useRef<HTMLTextAreaElement>(null);
 
   // Load saved code from localStorage
@@ -48,6 +49,17 @@ export function CodeMirrorEditor({
       localStorage.setItem(`challenge-${challengeId}-timestamp`, currentTime.toString());
       setLastSaveTime(new Date(currentTime));
     }
+  };
+
+  // Run script function (for demonstration)
+  const runScript = () => {
+    console.log('[CodeMirror] Run button clicked');
+    setRunMessage('✅ Code would execute here (CodeMirror editor)');
+
+    // Clear the message after 2 seconds
+    setTimeout(() => {
+      setRunMessage(null);
+    }, 2000);
   };
 
   // Auto-save when code changes
@@ -126,15 +138,31 @@ export function CodeMirrorEditor({
               <Save className="h-3 w-3" />
               <span>{getLastSaveText()}</span>
             </div>
+            {runMessage && (
+              <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                {runMessage}
+              </div>
+            )}
           </div>
-          <Button
-            onClick={() => setIsOpen(false)}
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-          >
-            <X className="h-3 w-3" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={runScript}
+              size="sm"
+              variant="outline"
+              className="h-6 px-2"
+            >
+              <Play className="h-3 w-3 mr-1" />
+              Run
+            </Button>
+            <Button
+              onClick={() => setIsOpen(false)}
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
 
         {/* Content */}

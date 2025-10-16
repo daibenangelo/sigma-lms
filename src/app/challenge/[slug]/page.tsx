@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Metadata } from "next";
 import { RichText } from "@/components/rich-text";
 import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 import { getEntriesByContentType } from "@/lib/contentful";
@@ -7,6 +8,96 @@ import CompletionIndicator from "@/components/CompletionIndicator";
 type Params = {
   params: Promise<{ slug: string }>;
 };
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+
+  try {
+    // Try different content types for challenges
+    const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment', 'project'];
+    let challengeEntry = null;
+
+    for (const contentType of challengeContentTypes) {
+      try {
+        const entries = await getEntriesByContentType(contentType, {
+          limit: 1,
+          "fields.slug": slug,
+          include: 10
+        });
+
+        if (entries && entries.length > 0) {
+          challengeEntry = entries[0];
+          break;
+        }
+      } catch (e) {
+        console.error(`Failed to fetch from ${contentType}:`, e);
+      }
+    }
+
+    if (!challengeEntry) {
+      return {
+        title: "Challenge Not Found | Sigma LMS",
+        description: "The requested coding challenge could not be found.",
+      };
+    }
+
+    const { fields } = challengeEntry;
+    const title = fields.title || "Coding Challenge";
+    const preview = fields.preview;
+
+    // Extract description from preview or content
+    let description = "Hands-on coding challenge to practice programming skills and problem-solving.";
+    if (preview && preview.content && preview.content.length > 0) {
+      const firstParagraph = preview.content.find((node: any) => node.nodeType === 'paragraph');
+      if (firstParagraph && firstParagraph.content) {
+        const textContent = firstParagraph.content
+          .filter((node: any) => node.nodeType === 'text')
+          .map((node: any) => node.value)
+          .join(' ');
+        if (textContent.length > 50) {
+          description = textContent.substring(0, 150) + "...";
+        } else {
+          description = textContent;
+        }
+      }
+    } else if (fields.content && fields.content.content && fields.content.content.length > 0) {
+      const firstParagraph = fields.content.content.find((node: any) => node.nodeType === 'paragraph');
+      if (firstParagraph && firstParagraph.content) {
+        const textContent = firstParagraph.content
+          .filter((node: any) => node.nodeType === 'text')
+          .map((node: any) => node.value)
+          .join(' ');
+        if (textContent.length > 50) {
+          description = textContent.substring(0, 150) + "...";
+        } else {
+          description = textContent;
+        }
+      }
+    }
+
+    return {
+      title: `${title} | Sigma LMS`,
+      description,
+      keywords: ["challenge", "programming", "coding", "software development", "practice", title.toLowerCase()],
+      openGraph: {
+        title: `${title} | Sigma LMS`,
+        description,
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title: `${title} | Sigma LMS`,
+        description,
+      },
+    };
+  } catch (error) {
+    console.error("Error generating metadata for challenge:", error);
+    return {
+      title: "Challenge | Sigma LMS",
+      description: "Interactive coding challenges and programming exercises.",
+    };
+  }
+}
 
 export default async function ChallengePage({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { slug } = await params;

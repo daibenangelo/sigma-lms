@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CheckCircle, XCircle } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { validateQuizAttempt } from "@/lib/localStorage-validator";
 
 type Props = {
   type: "challenge" | "quiz";
@@ -19,20 +20,29 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
     try {
       if (type === "challenge") {
         const key = `challenge-completed-${user?.id}-${slug}`;
-        const ok = typeof window !== "undefined" && user && localStorage.getItem(key) === "true";
+        const storedValue = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+        const ok = user && storedValue === "true";
+        console.log('[CompletionIndicator] Checking challenge completion:', {
+          slug,
+          key,
+          userId: user?.id,
+          storedValue,
+          ok,
+          completedState: completed
+        });
         setCompleted(!!ok);
         setLoading(false);
         return;
       }
 
       // quiz
-      if (!course) {
+      if (!course || !user) {
         setCompleted(false);
         setLoading(false);
         return;
       }
 
-      // Check localStorage for perfect score (same logic as StrictQuiz)
+      // Check localStorage for perfect score first
       if (typeof window !== 'undefined') {
         const keys = Object.keys(localStorage);
         const attemptKeys = keys.filter(key => key.startsWith(`quiz-${slug}-`));
@@ -43,40 +53,58 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
           keys: attemptKeys
         });
 
-        let hasPerfect = false;
+        let localPerfect = false;
+        let localLatestAttempt = null;
+
         for (const key of attemptKeys) {
           try {
             const attemptData = JSON.parse(localStorage.getItem(key) || '{}');
             if (attemptData.score_percentage === 100 || attemptData.passed === true) {
-              hasPerfect = true;
-              console.log('[CompletionIndicator] Found perfect score in key:', key);
-              break;
+              localPerfect = true;
+            }
+            // Keep track of the most recent attempt
+            if (!localLatestAttempt || new Date(attemptData.completed_at) > new Date(localLatestAttempt.completed_at)) {
+              localLatestAttempt = attemptData;
             }
           } catch (e) {
             // Ignore malformed data
           }
         }
 
-        if (hasPerfect) {
-          setCompleted(true);
+        // Validate localStorage data against database
+        const validation = await validateQuizAttempt(slug, localLatestAttempt);
+
+        console.log('[CompletionIndicator] Validation result:', validation);
+
+        if (validation.shouldUseDatabase && validation.databaseData) {
+          // Use database data (most accurate)
+          const dbPerfect = validation.databaseData.score_percentage === 100 || validation.databaseData.passed === true;
+          setCompleted(dbPerfect);
+          console.log('[CompletionIndicator] Using database data:', { dbPerfect });
+        } else if (validation.shouldUseLocal && validation.localData) {
+          // Use localStorage data (database unavailable or no database data)
+          setCompleted(localPerfect);
+          console.log('[CompletionIndicator] Using localStorage data:', { localPerfect });
+        } else {
+          // No data available
+          setCompleted(false);
+        }
+      } else {
+        // Fallback to API if localStorage is not available
+        const res = await fetch(`/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`);
+        if (!res.ok) {
+          setCompleted(false);
           setLoading(false);
           return;
         }
+        const data = await res.json();
+        const hasPerfect = Array.isArray(data.attempts)
+          ? data.attempts.some((a: any) => a?.score_percentage === 100)
+          : !!data.hasPerfectScore;
+        setCompleted(hasPerfect);
       }
-
-      // Fallback to API if no perfect score found in localStorage
-      const res = await fetch(`/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`);
-      if (!res.ok) {
-        setCompleted(false);
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
-      const hasPerfect = Array.isArray(data.attempts)
-        ? data.attempts.some((a: any) => a?.score_percentage === 100)
-        : !!data.hasPerfectScore;
-      setCompleted(hasPerfect);
-    } catch {
+    } catch (error) {
+      console.error('[CompletionIndicator] Error checking completion status:', error);
       setCompleted(false);
     } finally {
       setLoading(false);
@@ -85,15 +113,26 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
 
   useEffect(() => {
     checkStatus();
-  }, [type, slug, course]);
+  }, [type, slug, course, user]);
 
   // Listen for completion events to refresh status
   useEffect(() => {
     const handleItemCompleted = (event: any) => {
       const { slug: eventSlug } = event.detail;
+      console.log('[CompletionIndicator] Received item-completed event:', {
+        eventSlug,
+        componentSlug: slug,
+        matches: eventSlug === slug
+      });
+
       if (eventSlug === slug) {
-        console.log('[CompletionIndicator] Received item-completed event for:', slug);
-        checkStatus();
+        console.log('[CompletionIndicator] Event slug matches component slug, updating status');
+        // Small delay to ensure localStorage is updated
+        setTimeout(() => {
+          checkStatus();
+        }, 50);
+      } else {
+        console.log('[CompletionIndicator] Event slug does not match component slug');
       }
     };
 
@@ -112,7 +151,7 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
         window.removeEventListener('quiz-completed', handleQuizCompleted);
       };
     }
-  }, [slug, type]);
+  }, [slug, type, user]);
 
   if (loading) return null;
 

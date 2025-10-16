@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle, XCircle } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { validateQuizAttempt, clearUserLocalStorage } from "@/lib/localStorage-validator";
+import { supabase } from "@/lib/supabase";
 
 interface Props {
   quizSlug: string;
@@ -16,68 +19,114 @@ export default function QuizLastScore({ quizSlug }: Props) {
   const [passed, setPassed] = useState<boolean | null>(null);
   const [when, setWhen] = useState<string | null>(null);
   const [totalAttempts, setTotalAttempts] = useState<number>(0);
+  const { user } = useAuth();
 
   const fetchLast = async () => {
     console.log('[QuizLastScore] fetchLast called for quiz:', quizSlug);
     try {
-      // Use localStorage for attempt tracking
-      if (typeof window !== 'undefined') {
-        console.log('[QuizLastScore] Checking localStorage for quiz:', quizSlug);
-        console.log('[QuizLastScore] localStorage available:', typeof localStorage !== 'undefined');
-        console.log('[QuizLastScore] Storage available:', typeof Storage !== 'undefined');
-
-        // First check the latest attempt key
-        const latestKey = `quiz-last-${quizSlug}`;
-        const local = localStorage.getItem(latestKey);
-
-        console.log('[QuizLastScore] Latest key check:', {
-          latestKey,
-          exists: !!local,
-          localStorageKeys: Object.keys(localStorage).filter(k => k.includes('quiz'))
-        });
-
-        if (local) {
-          try {
-            const attempt = JSON.parse(local);
-            console.log('[QuizLastScore] Parsed latest attempt:', attempt);
-            setHasAttempt(true);
-            setScore(attempt.score ?? null);
-            setTotal(attempt.total_questions ?? null);
-            setPercentage(attempt.score_percentage ?? null);
-            setPassed(attempt.passed ?? null);
-            setWhen(attempt.completed_at ?? null);
-            console.log('[QuizLastScore] Loaded latest attempt:', attempt);
-          } catch (parseError) {
-            console.error('[QuizLastScore] Failed to parse latest attempt:', parseError);
-            setHasAttempt(false);
-          }
-        } else {
-          console.log('[QuizLastScore] No latest attempt found');
-          setHasAttempt(false);
-        }
-
-        // Count total attempts from localStorage keys
-        const keys = Object.keys(localStorage);
-        const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
-
-        console.log('[QuizLastScore] localStorage keys found:', {
-          allKeys: keys.length,
-          attemptKeys: attemptKeys.length,
-          quizSlug,
-          keys: attemptKeys,
-          allLocalStorageKeys: keys
-        });
-
-        const total = attemptKeys.length;
-        setTotalAttempts(total);
-        console.log('[QuizLastScore] Total attempts set to:', total);
-
-        // Debug: Check if we can find any quiz-related keys at all
-        const allQuizKeys = keys.filter(key => key.includes('quiz'));
-        console.log('[QuizLastScore] All quiz-related keys in localStorage:', allQuizKeys);
+      if (!user) {
+        console.log('[QuizLastScore] No user found, cannot fetch quiz data');
+        setLoaded(true);
+        return;
       }
-    } catch {
-      // ignore
+
+      // Get localStorage data first
+      const latestKey = `quiz-last-${quizSlug}`;
+      const localData = typeof window !== 'undefined' ? localStorage.getItem(latestKey) : null;
+      let localAttempt = null;
+
+      if (localData) {
+        try {
+          localAttempt = JSON.parse(localData);
+          console.log('[QuizLastScore] Found localStorage data:', localAttempt);
+        } catch (parseError) {
+          console.error('[QuizLastScore] Failed to parse localStorage data:', parseError);
+        }
+      }
+
+      // Validate localStorage data against database
+      const validation = await validateQuizAttempt(quizSlug, localAttempt);
+
+      console.log('[QuizLastScore] Validation result:', validation);
+
+      if (validation.shouldUseDatabase && validation.databaseData) {
+        // Use database data (most accurate)
+        console.log('[QuizLastScore] Using database data:', validation.databaseData);
+        setHasAttempt(true);
+        setScore(validation.databaseData.score ?? null);
+        setTotal(validation.databaseData.total_questions ?? null);
+        setPercentage(validation.databaseData.score_percentage ?? null);
+        setPassed(validation.databaseData.passed ?? null);
+        setWhen(validation.databaseData.completed_at ?? null);
+
+        // Update localStorage with database data for consistency
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(latestKey, JSON.stringify(validation.databaseData));
+        }
+      } else if (validation.shouldUseLocal && validation.localData) {
+        // Use localStorage data (database unavailable or no database data)
+        console.log('[QuizLastScore] Using localStorage data:', validation.localData);
+        setHasAttempt(true);
+        setScore(validation.localData.score ?? null);
+        setTotal(validation.localData.total_questions ?? null);
+        setPercentage(validation.localData.score_percentage ?? null);
+        setPassed(validation.localData.passed ?? null);
+        setWhen(validation.localData.completed_at ?? null);
+      } else {
+        // No data available
+        console.log('[QuizLastScore] No quiz data found');
+        setHasAttempt(false);
+        setScore(null);
+        setTotal(null);
+        setPercentage(null);
+        setPassed(null);
+        setWhen(null);
+      }
+
+      // Count total attempts from database or localStorage
+      if (validation.shouldUseDatabase) {
+        // Count from database
+        const { data: allAttempts, error: countError } = await supabase
+          .from('user_quiz_attempts')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('quiz_slug', quizSlug);
+
+        if (!countError && allAttempts) {
+          setTotalAttempts(allAttempts.length);
+          console.log('[QuizLastScore] Database attempt count:', allAttempts.length);
+        } else {
+          console.error('[QuizLastScore] Error counting database attempts:', countError);
+          // Fallback to localStorage count
+          if (typeof window !== 'undefined') {
+            const keys = Object.keys(localStorage);
+            const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
+            setTotalAttempts(attemptKeys.length);
+          }
+        }
+      } else {
+        // Use localStorage count
+        if (typeof window !== 'undefined') {
+          const keys = Object.keys(localStorage);
+          const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
+          setTotalAttempts(attemptKeys.length);
+          console.log('[QuizLastScore] localStorage attempt count:', attemptKeys.length);
+        }
+      }
+
+    } catch (error) {
+      console.error('[QuizLastScore] Error fetching quiz data:', error);
+      // Fallback to localStorage only
+      if (localAttempt) {
+        setHasAttempt(true);
+        setScore(localAttempt.score ?? null);
+        setTotal(localAttempt.total_questions ?? null);
+        setPercentage(localAttempt.score_percentage ?? null);
+        setPassed(localAttempt.passed ?? null);
+        setWhen(localAttempt.completed_at ?? null);
+      } else {
+        setHasAttempt(false);
+      }
     } finally {
       setLoaded(true);
     }
@@ -85,6 +134,27 @@ export default function QuizLastScore({ quizSlug }: Props) {
 
   useEffect(() => {
     fetchLast();
+
+    // Listen for database reset events
+    const handleDatabaseReset = () => {
+      console.log('[QuizLastScore] Database reset detected, clearing localStorage...');
+      // Clear all quiz-related localStorage data
+      if (typeof window !== 'undefined') {
+        Object.keys(localStorage).filter(k => k.includes('quiz')).forEach(k => {
+          console.log('[QuizLastScore] Removing localStorage key:', k);
+          localStorage.removeItem(k);
+        });
+      }
+      // Refetch data after clearing
+      setTimeout(() => fetchLast(), 100);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('database-reset', handleDatabaseReset);
+      return () => {
+        window.removeEventListener('database-reset', handleDatabaseReset);
+      };
+    }
   }, [quizSlug]);
 
   // Listen for quiz completion events

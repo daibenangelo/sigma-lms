@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle, Clock, Play, CheckSquare } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/auth-context";
+import { validateQuizAttempt } from "@/lib/localStorage-validator";
 
 export interface QuizQuestion {
   id: string;
@@ -51,51 +52,96 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
   useEffect(() => {
     const loadLastAttempt = async () => {
       try {
-        if (!quizSlug || typeof window === 'undefined') return;
+        if (!quizSlug || !user) {
+          setIsLoading(false);
+          return;
+        }
 
         // Check localStorage for perfect score and latest attempt
         const keys = Object.keys(localStorage);
         const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
 
-        let hasPerfect = false;
-        let latestAttempt = null;
+        let localPerfect = false;
+        let localLatestAttempt = null;
 
         for (const key of attemptKeys) {
           try {
             const attemptData = JSON.parse(localStorage.getItem(key) || '{}');
             if (attemptData.score_percentage === 100 || attemptData.passed === true) {
-              hasPerfect = true;
+              localPerfect = true;
             }
             // Keep track of the most recent attempt
-            if (!latestAttempt || new Date(attemptData.completed_at) > new Date(latestAttempt.completed_at)) {
-              latestAttempt = attemptData;
+            if (!localLatestAttempt || new Date(attemptData.completed_at) > new Date(localLatestAttempt.completed_at)) {
+              localLatestAttempt = attemptData;
             }
           } catch (e) {
             // Ignore malformed data
           }
         }
 
-        console.log('[StrictQuiz] Perfect score check:', { hasPerfect, attemptCount: attemptKeys.length });
+        console.log('[StrictQuiz] Local storage check:', { localPerfect, attemptCount: attemptKeys.length });
 
-        setHasPerfectScore(hasPerfect);
+        // Validate localStorage data against database
+        const validation = await validateQuizAttempt(quizSlug, localLatestAttempt);
 
-        if (latestAttempt) {
+        console.log('[StrictQuiz] Database validation result:', validation);
+
+        if (validation.shouldUseDatabase && validation.databaseData) {
+          // Use database data (most accurate)
+          const dbPerfect = validation.databaseData.score_percentage === 100 || validation.databaseData.passed === true;
+          setHasPerfectScore(dbPerfect);
+
           setLastAttempt({
-            score: latestAttempt.score ?? 0,
-            total: latestAttempt.total_questions ?? questions.length,
-            percentage: latestAttempt.score_percentage ?? 0,
-            passed: latestAttempt.passed ?? false,
-            when: latestAttempt.completed_at || undefined
+            score: validation.databaseData.score ?? 0,
+            total: validation.databaseData.total_questions ?? questions.length,
+            percentage: validation.databaseData.score_percentage ?? 0,
+            passed: validation.databaseData.passed ?? false,
+            when: validation.databaseData.completed_at || undefined
           });
+
+          // Update localStorage with database data for consistency
+          if (typeof window !== 'undefined') {
+            const latestKey = `quiz-last-${quizSlug}`;
+            localStorage.setItem(latestKey, JSON.stringify(validation.databaseData));
+          }
+
+          console.log('[StrictQuiz] Using database data:', { dbPerfect });
+        } else if (validation.shouldUseLocal && validation.localData) {
+          // Use localStorage data (database unavailable or no database data)
+          setHasPerfectScore(localPerfect);
+          setLastAttempt({
+            score: validation.localData.score ?? 0,
+            total: validation.localData.total_questions ?? questions.length,
+            percentage: validation.localData.score_percentage ?? 0,
+            passed: validation.localData.passed ?? false,
+            when: validation.localData.completed_at || undefined
+          });
+
+          console.log('[StrictQuiz] Using localStorage data:', { localPerfect });
+        } else {
+          // No data available
+          setHasPerfectScore(false);
+          setLastAttempt(null);
         }
       } catch (e) {
-        // ignore
+        console.error('[StrictQuiz] Error loading last attempt:', e);
+        // Fallback to localStorage only
+        setHasPerfectScore(localPerfect);
+        if (localLatestAttempt) {
+          setLastAttempt({
+            score: localLatestAttempt.score ?? 0,
+            total: localLatestAttempt.total_questions ?? questions.length,
+            percentage: localLatestAttempt.score_percentage ?? 0,
+            passed: localLatestAttempt.passed ?? false,
+            when: localLatestAttempt.completed_at || undefined
+          });
+        }
       } finally {
         setIsLoading(false);
       }
     };
     loadLastAttempt();
-  }, [quizSlug, questions.length]);
+  }, [quizSlug, questions.length, user]);
 
 
   // Timer effect

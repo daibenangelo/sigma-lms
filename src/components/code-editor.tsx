@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Code, ExternalLink, Save, File, Play } from "lucide-react";
+import { X, Code, ExternalLink, Save, File, Play, CheckCircle } from "lucide-react";
 
 interface CodeEditorProps {
   initialFiles?: Record<string, string>;
@@ -17,6 +17,7 @@ export function CodeEditor({ initialFiles = {}, course, challengeId }: CodeEdito
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
+  const [runMessage, setRunMessage] = useState<string | null>(null);
   const editorRef = useRef<HTMLDivElement>(null);
   const monacoRef = useRef<any>(null);
 
@@ -98,6 +99,17 @@ document.addEventListener('DOMContentLoaded', function() {
       localStorage.setItem(`challenge-${challengeId}-timestamp`, currentTime.toString());
       setLastSaveTime(new Date(currentTime));
     }
+  };
+
+  // Run script function (for demonstration)
+  const runScript = () => {
+    console.log('[CodeEditor] Run button clicked');
+    setRunMessage('✅ Code would execute here (Monaco editor)');
+
+    // Clear the message after 2 seconds
+    setTimeout(() => {
+      setRunMessage(null);
+    }, 2000);
   };
 
   // Auto-save when files change
@@ -256,8 +268,22 @@ document.addEventListener('DOMContentLoaded', function() {
               <Save className="h-3 w-3" />
               <span>{getLastSaveText()}</span>
             </div>
+            {runMessage && (
+              <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                {runMessage}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              onClick={runScript}
+              size="sm"
+              variant="outline"
+              className="h-6 px-2"
+            >
+              <Play className="h-3 w-3 mr-1" />
+              Run
+            </Button>
             <Button
               onClick={() => setIsOpen(false)}
               variant="ghost"

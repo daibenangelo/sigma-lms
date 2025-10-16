@@ -1,8 +1,10 @@
 ﻿"use client";
 
+import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { User, Mail, Calendar, BookOpen, Trophy, Target, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 interface CourseProgress {
   id: string;
@@ -17,8 +19,10 @@ interface CourseProgress {
   viewedCount: number;
 }
 
+// Note: Metadata is handled by the root layout for client components
+
 export default function ProfilePage() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const [courses, setCourses] = useState<CourseProgress[]>([]);
   const [isLoadingCourses, setIsLoadingCourses] = useState(true);
 
@@ -39,13 +43,20 @@ export default function ProfilePage() {
                 if (lessonsRes.ok) {
                   const lessonsData = await lessonsRes.json();
 
-                  // Calculate viewed and completed counts from user-specific localStorage
-                  const viewedKeys = user ? Object.keys(localStorage).filter(key =>
-                    key.startsWith(`viewedItems_${user.id}_${course.slug}`)
-                  ) : [];
-                  const completedKeys = user ? Object.keys(localStorage).filter(key =>
-                    key.startsWith(`completedItems_${user.id}_${course.slug}`)
-                  ) : [];
+                  // Validate localStorage progress counts
+                  let localViewedCount = 0;
+                  let localCompletedCount = 0;
+
+                  if (user && typeof window !== 'undefined') {
+                    const viewedKeys = Object.keys(localStorage).filter(key =>
+                      key.startsWith(`viewedItems_${user.id}_${course.slug}`)
+                    );
+                    const completedKeys = Object.keys(localStorage).filter(key =>
+                      key.startsWith(`completedItems_${user.id}_${course.slug}`)
+                    );
+                    localViewedCount = viewedKeys.length;
+                    localCompletedCount = completedKeys.length;
+                  }
 
                   return {
                     id: course.id,
@@ -56,8 +67,8 @@ export default function ProfilePage() {
                     tutorialCount: course.tutorialCount || 0,
                     challengeCount: course.challengeCount || 0,
                     progressPercentage: course.progressPercentage || 0,
-                    completedCount: completedKeys.length,
-                    viewedCount: viewedKeys.length
+                    completedCount: localCompletedCount,
+                    viewedCount: localViewedCount
                   };
                 }
               } catch (error) {
@@ -88,9 +99,7 @@ export default function ProfilePage() {
       }
     };
 
-    if (user) {
-      fetchProgressData();
-    }
+    fetchProgressData();
   }, [user]);
 
   if (loading) {
@@ -99,17 +108,6 @@ export default function ProfilePage() {
         <div className="animate-pulse">
           <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
           <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="max-w-4xl mx-auto py-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Not Logged In</h1>
-          <p className="text-gray-600">Please log in to view your profile.</p>
         </div>
       </div>
     );
@@ -129,21 +127,38 @@ export default function ProfilePage() {
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-2">
               <h1 className="text-2xl font-bold text-gray-900">
-                {user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'}
+                {user ? (user.user_metadata?.full_name || user.email?.split('@')[0] || 'User') : 'Profile'}
               </h1>
+              {user && (
+                <Link href="/auth/login" className="text-sm text-blue-600 hover:text-blue-700">
+                  {user ? 'Sign Out' : 'Sign In'}
+                </Link>
+              )}
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <Mail className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{user.email}</span>
+            {user && (
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Mail className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-600">{user.email}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Calendar className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-600">
+                    Member since {new Date(user.created_at).toLocaleDateString()}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">
-                  Member since {new Date(user.created_at).toLocaleDateString()}
-                </span>
+            )}
+            {!user && (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">
+                  Sign in to track your progress and save your work.
+                </p>
+                <Link href="/auth/login" className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700">
+                  Sign In to Work on Code
+                </Link>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
@@ -163,7 +178,7 @@ export default function ProfilePage() {
               <div className="h-4 bg-gray-200 rounded w-1/2"></div>
               <div className="h-4 bg-gray-200 rounded w-2/3"></div>
             </div>
-          ) : (
+          ) : user ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Total Items */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -210,6 +225,15 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="text-center py-8">
+              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Track Your Progress</h3>
+              <p className="text-gray-600 mb-4">Sign in to save your progress and track your learning journey.</p>
+              <Link href="/auth/login" className="inline-flex items-center text-blue-600 hover:text-blue-700">
+                Sign In to Work on Code
+              </Link>
+            </div>
           )}
         </div>
 
@@ -228,7 +252,7 @@ export default function ProfilePage() {
               <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No courses available yet.</p>
             </div>
-          ) : (
+          ) : user ? (
             <div className="space-y-6">
               {courses.map((course) => {
                 const totalItems = course.chapters + course.quizCount + course.tutorialCount + course.challengeCount;
@@ -276,6 +300,15 @@ export default function ProfilePage() {
                   </div>
                 );
               })}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">View Course Progress</h3>
+              <p className="text-gray-600 mb-4">Sign in to track your progress and save your work.</p>
+              <Link href="/auth/login" className="inline-flex items-center text-blue-600 hover:text-blue-700">
+                Sign In to Work on Code
+              </Link>
             </div>
           )}
         </div>

@@ -41,17 +41,10 @@ export function useCourseProgress(courseSlug?: string) {
         .maybeSingle();
 
       if (courseProgressError && courseProgressError.code === 'PGRST205') {
-        // Table doesn't exist, try user_progress
-        console.warn('[useCourseProgress] user_course_progress table not found, trying user_progress');
-        const { data: userProgressData, error: userProgressError } = await supabase
-          .from('user_progress')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('course_slug', courseSlug)
-          .maybeSingle();
-        
-        data = userProgressData;
-        error = userProgressError;
+        // Table doesn't exist, return null (no progress tracking available)
+        console.warn('[useCourseProgress] user_course_progress table not found, progress tracking unavailable');
+        setProgress(null);
+        return;
       } else {
         data = courseProgressData;
         error = courseProgressError;
@@ -111,20 +104,9 @@ export function useCourseProgress(courseSlug?: string) {
         });
 
       if (courseProgressError && courseProgressError.code === 'PGRST205') {
-        // Table doesn't exist, try user_progress
-        console.warn('[useCourseProgress] user_course_progress table not found, trying user_progress');
-        
-        // Remove viewed_items for user_progress table if it doesn't have that column
-        const userProgressData = { ...upsertData };
-        delete userProgressData.viewed_items;
-        
-        const { error: userProgressError } = await supabase
-          .from('user_progress')
-          .upsert(userProgressData, {
-            onConflict: 'user_id,course_slug'
-          });
-        
-        error = userProgressError;
+        // Table doesn't exist, log warning and skip save (progress tracking unavailable)
+        console.warn('[useCourseProgress] user_course_progress table not found, progress save skipped');
+        return false;
       } else {
         error = courseProgressError;
       }

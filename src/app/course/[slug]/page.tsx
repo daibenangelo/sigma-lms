@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { Metadata } from "next";
 import { getCachedLessons } from "@/lib/server-cache";
 
 type Params = {
@@ -19,6 +20,45 @@ type ApiResponse = {
   allContent: ContentItem[];
   courseName: string;
 };
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { slug } = await params;
+
+  try {
+    const apiData = await getCachedLessons(slug);
+    if (!apiData) {
+      return {
+        title: "Course Not Found | Sigma LMS",
+        description: "The requested course could not be found.",
+      };
+    }
+
+    const { courseName, allContent } = apiData;
+    const itemCount = allContent.length;
+
+    return {
+      title: `${courseName} | Sigma LMS`,
+      description: `Learn ${courseName} with ${itemCount} interactive lessons, tutorials, quizzes, and challenges. Part of the Software Development Programme.`,
+      keywords: ["course", "learning", "programming", courseName.toLowerCase(), "software development"],
+      openGraph: {
+        title: `${courseName} | Sigma LMS`,
+        description: `Learn ${courseName} with ${itemCount} interactive lessons, tutorials, quizzes, and challenges. Part of the Software Development Programme.`,
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title: `${courseName} | Sigma LMS`,
+        description: `Learn ${courseName} with ${itemCount} interactive lessons, tutorials, quizzes, and challenges.`,
+      },
+    };
+  } catch (error) {
+    console.error("Error generating metadata for course:", error);
+    return {
+      title: "Course | Sigma LMS",
+      description: "Interactive learning platform for software development courses.",
+    };
+  }
+}
 
 export default async function CoursePage({ params }: Params) {
   const { slug } = await params;

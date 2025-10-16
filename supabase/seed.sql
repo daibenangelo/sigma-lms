@@ -1,4 +1,4 @@
--- Insert sample courses
+-- Insert sample courses (keeping UUIDs consistent for easier testing)
 INSERT INTO public.courses (id, title, description, slug, is_published) VALUES
   ('550e8400-e29b-41d4-a716-446655440001', 'Introduction to Web Development', 'Learn the fundamentals of web development including HTML, CSS, and JavaScript.', 'intro-web-dev', true),
   ('550e8400-e29b-41d4-a716-446655440002', 'Advanced React Patterns', 'Master advanced React concepts and patterns for building scalable applications.', 'advanced-react', true),

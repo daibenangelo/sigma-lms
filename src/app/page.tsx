@@ -1,4 +1,21 @@
 import Link from "next/link";
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sigma LMS - Interactive Learning Management System",
+  description: "Learn software development with interactive courses, tutorials, quizzes, and coding challenges. Start your programming journey today.",
+  keywords: ["learning management system", "LMS", "software development", "programming", "coding", "tutorials", "courses"],
+  openGraph: {
+    title: "Sigma LMS - Interactive Learning Management System",
+    description: "Learn software development with interactive courses, tutorials, quizzes, and coding challenges. Start your programming journey today.",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sigma LMS - Interactive Learning Management System",
+    description: "Learn software development with interactive courses, tutorials, quizzes, and coding challenges.",
+  },
+};
 
 export default function HomePage() {
   return (
@@ -13,16 +30,16 @@ export default function HomePage() {
           </p>
           <div className="space-x-4">
             <Link
-              href="/dashboard"
+              href="/course/html"
               className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
             >
-              Go to Dashboard
+              Start Learning
             </Link>
             <Link
-              href="/course/html"
+              href="/programs"
               className="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
             >
-              Start HTML Course
+              View Programs
             </Link>
           </div>
         </div>

@@ -149,8 +149,8 @@ export function Navbar() {
                 <span className="ml-4 text-sm text-gray-500">
                   {courseName}
                 </span>
-                <Link 
-                  href={`/course/${currentCourse}`}
+                <Link
+                  href={`/csdp/courses?course=${currentCourse}`}
                   className="ml-2 text-sm text-blue-600 hover:text-blue-800 underline"
                 >
                   Back to Course
@@ -233,12 +233,6 @@ export function Navbar() {
                     <Link href="/profile" className="flex items-center space-x-2">
                       <User className="h-4 w-4" />
                       <span>Profile</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard" className="flex items-center space-x-2">
-                      <Activity className="h-4 w-4" />
-                      <span>Dashboard</span>
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem 
@@ -335,7 +329,7 @@ export function Navbar() {
               {isClient && currentCourse && (
                 <div className="border-t border-gray-200 pt-4 mt-4">
                   <Link
-                    href={`/course/${currentCourse}`}
+                    href={`/csdp/courses?course=${currentCourse}`}
                     className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50 text-blue-600"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
@@ -358,14 +352,6 @@ export function Navbar() {
                     >
                       <User className="h-4 w-4" />
                       <span>Profile</span>
-                    </Link>
-                    <Link
-                      href="/dashboard"
-                      className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-50"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      <Activity className="h-4 w-4" />
-                      <span>Dashboard</span>
                     </Link>
                     <button
                       onClick={async () => {

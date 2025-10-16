@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Metadata } from "next";
 import { getEntriesByContentType } from "@/lib/contentful";
 import { StrictQuiz } from "@/components/strict-quiz";
 import QuizLastScore from "@/components/quiz-last-score";
@@ -25,6 +26,52 @@ function richTextToPlainText(doc: any): string {
 type Params = {
   params: { slug: string };
 };
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const { slug } = params;
+
+  try {
+    const chapterQuizItems = await getEntriesByContentType<{
+      title?: string;
+      slug?: string;
+      quiz?: any[];
+    }>("moduleQuiz", { limit: 1, "fields.slug": slug, include: 10 });
+
+    const chapterQuiz = chapterQuizItems[0];
+    if (!chapterQuiz) {
+      return {
+        title: "Quiz Not Found | Sigma LMS",
+        description: "The requested quiz could not be found.",
+      };
+    }
+
+    const title = (chapterQuiz.fields as any)?.title || "Quiz";
+    const questions = Array.isArray((chapterQuiz.fields as any).quiz) ? (chapterQuiz.fields as any).quiz : [];
+    const questionCount = questions.length;
+
+    return {
+      title: `${title} | Sigma LMS`,
+      description: `Test your knowledge with this ${questionCount}-question quiz. Part of the Software Development Programme.`,
+      keywords: ["quiz", "assessment", "programming", "software development", "learning", title.toLowerCase()],
+      openGraph: {
+        title: `${title} | Sigma LMS`,
+        description: `Test your knowledge with this ${questionCount}-question quiz. Part of the Software Development Programme.`,
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title: `${title} | Sigma LMS`,
+        description: `Test your knowledge with this ${questionCount}-question quiz.`,
+      },
+    };
+  } catch (error) {
+    console.error("Error generating metadata for quiz:", error);
+    return {
+      title: "Quiz | Sigma LMS",
+      description: "Interactive programming quizzes and assessments.",
+    };
+  }
+}
 
 export default async function QuizPage({ params, searchParams }: any) {
   const { slug } = await params;

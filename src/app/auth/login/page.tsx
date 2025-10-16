@@ -11,6 +11,8 @@ import { useAuth } from '@/contexts/auth-context'
 import { BookOpen, Sparkles, Eye, EyeOff } from 'lucide-react'
 import Image from 'next/image'
 
+// Note: Metadata is handled by the root layout for client components
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

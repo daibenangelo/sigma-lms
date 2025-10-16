@@ -14,7 +14,6 @@ export function Shell({ children }: ShellProps) {
 
   // Pages that should not show navbar and sidebar
   const standalonePages = [
-    "/dashboard",
     "/profile"
   ];
 

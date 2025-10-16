@@ -150,6 +150,15 @@ class CacheManager {
 // Global cache instance
 export const cacheManager = new CacheManager();
 
+// Listen for database reset events to clear cache
+if (typeof window !== 'undefined') {
+  window.addEventListener('database-reset', () => {
+    console.log('[CacheManager] Database reset detected, clearing cache');
+    cacheManager.clear();
+    cacheManager.resetStats();
+  });
+}
+
 // Cleanup expired entries every 10 minutes
 if (typeof window === "undefined") {
   setInterval(() => {
