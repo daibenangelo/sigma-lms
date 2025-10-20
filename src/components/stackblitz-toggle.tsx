@@ -949,7 +949,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
               try {
                 // Track test results
                 let testsPassed = true;
-                let testErrors: string[] = [];
+                const testErrors: string[] = [];
 
                 console.log('🧪 TEST EXECUTION DEBUG:');
                 console.log('Test code to execute:', testCode.substring(0, 200) + '...');
@@ -974,7 +974,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
 
                   // Track assertion count to ensure tests actually ran
                   let assertionCount = 0;
-                  let assertionFailures: string[] = [];
+                  const assertionFailures: string[] = [];
                   let isRunTestsPattern = false;
 
                   // Check if this is a runTests(studentCode) pattern
@@ -1143,10 +1143,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                       }
 
                       // Execute the test code
-                      let testFunctionCode;
-
-                      // Always pass document as parameter to ensure it's available
-                      testFunctionCode = new Function(`
+                      const testFunctionCode = new Function(`
                         "use strict";
 
                         // Set up Node.js globals if needed
