@@ -360,10 +360,8 @@ function FusedCourseContent({
 
 export default function FusedCourseLayout({
   children,
-  courses = [],
 }: {
   children: React.ReactNode;
-  courses?: Course[];
 }) {
   return (
     <Suspense fallback={
@@ -374,7 +372,7 @@ export default function FusedCourseLayout({
         </div>
       </div>
     }>
-      <FusedCourseContent courses={courses}>
+      <FusedCourseContent>
         {children}
       </FusedCourseContent>
     </Suspense>
