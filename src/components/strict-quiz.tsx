@@ -156,6 +156,12 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
   }, [quizState, startTime]);
 
   const handleStartQuiz = () => {
+    // Check if user is logged in before starting quiz
+    if (!user) {
+      window.location.href = '/auth/login';
+      return;
+    }
+    
     setQuizState('in-progress');
     setStartTime(new Date());
     setCurrentQuestion(0);
@@ -472,9 +478,10 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
           <Button 
             onClick={handleStartQuiz}
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            title={!user ? 'Sign in to start the quiz' : 'Start the quiz'}
           >
             <Play className="h-5 w-5 mr-2" />
-            Start Quiz
+            {user ? 'Start Quiz' : 'Sign In to Start Quiz'}
           </Button>
         </div>
       </div>

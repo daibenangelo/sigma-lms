@@ -780,9 +780,18 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
     console.log('Test code length:', testCode.length);
     console.log('Test code preview (first 500 chars):', testCode.substring(0, 500));
 
-    // Check if test code contains assertions
-    const hasAsserts = testCode.includes('console.assert') || testCode.includes('assert');
-    console.log('🧪 Test code contains assertions:', hasAsserts);
+    // Check what type of test this is (prioritize runTest since that's the only pattern used)
+    const hasRunTestFunction = testCode.includes('function runTest(') || testCode.includes('const runTest =') || testCode.includes('let runTest =');
+    const hasRunTestsFunction = testCode.includes('function runTests(') || testCode.includes('const runTests =') || testCode.includes('let runTests =');
+    const hasAssertFunction = testCode.includes('function assert(') || testCode.includes('const assert =') || testCode.includes('let assert =');
+    const hasConsoleAsserts = testCode.includes('console.assert');
+    const hasRequireAssert = testCode.includes("require('assert')") || testCode.includes('require("assert")');
+
+    console.log('🧪 Test type - runTest function:', hasRunTestFunction);
+    console.log('🧪 Test type - runTests function:', hasRunTestsFunction);
+    console.log('🧪 Test type - assert function:', hasAssertFunction);
+    console.log('🧪 Test type - console.assert:', hasConsoleAsserts);
+    console.log('🧪 Test type - require assert:', hasRequireAssert);
 
     try {
       // Wait a bit for localStorage to be updated
@@ -903,21 +912,34 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
         throw new Error('No index.html found in VM or snapshot');
       }
 
-      // Check if script.js is empty or only contains whitespace/comments
-      const trimmedScript = scriptContent.trim();
-      const scriptWithoutComments = trimmedScript.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '').trim();
-      
-      if (!scriptWithoutComments || scriptWithoutComments.length === 0) {
-        throw new Error('Your script.js file is empty. Please write some code before running tests.');
+      // Check if script.js is needed based on test pattern
+      const hasRunTestsFunction = testCode.includes('function runTests(') || testCode.includes('const runTests =') || testCode.includes('let runTests =');
+      const hasRunTestFunction = testCode.includes('function runTest(') || testCode.includes('const runTest =') || testCode.includes('let runTest =');
+      const needsScriptContent = hasRunTestsFunction; // Only runTests needs script.js, runTest works with DOM
+
+      if (needsScriptContent) {
+        // For runTests(studentCode) pattern, script.js is required
+        const trimmedScript = scriptContent.trim();
+        const scriptWithoutComments = trimmedScript.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '').trim();
+
+        if (!scriptWithoutComments || scriptWithoutComments.length === 0) {
+          throw new Error('Your script.js file is empty. This challenge requires JavaScript code to test against.');
+        }
+
+        console.log('[StackBlitz] Script content validation passed - user has written JavaScript code');
+      } else {
+        // For other test patterns, script.js might be optional
+        console.log('[StackBlitz] Non-runTests test pattern detected - script.js may be optional');
+        if (!scriptContent || scriptContent.trim().length === 0) {
+          console.log('[StackBlitz] No script.js content provided - tests may check HTML/CSS only');
+        }
       }
-      
-      console.log('[StackBlitz] Script content validation passed - user has written code');
 
       console.log('[StackBlitz] Testing HTML content:', htmlContent.substring(0, 200) + '...');
 
       // Debug: Check what content we're actually testing
       console.log('[StackBlitz] Final HTML content preview:', htmlContent.substring(0, 200));
-      console.log('[StackBlitz] Final script content preview:', scriptContent?.substring(0, 100));
+      console.log('[StackBlitz] Final script content preview:', (scriptContent || '').substring(0, 100));
 
       // Create a mock DOM environment for the test
       const parser = new DOMParser();
@@ -953,16 +975,381 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                   // Track assertion count to ensure tests actually ran
                   let assertionCount = 0;
                   let assertionFailures: string[] = [];
+                  let isRunTestsPattern = false;
 
-                  // Simple globals for test execution
-                  const simpleGlobals = {
+                  // Check if this is a runTests(studentCode) pattern
+                  if (hasRunTestsFunction) {
+                    console.log('🧪 Detected runTests(studentCode) pattern - pure JavaScript test');
+                    isRunTestsPattern = true;
+                    
+                    // Execute the test function definition
+                    const testFunctionCode = new Function(`
+                      "use strict";
+                  ${testCode}
+                      return runTests;
+                    `);
+                    
+                    const runTestsFunc = testFunctionCode();
+                    console.log('🧪 runTests function extracted successfully');
+                    console.log('🧪 Running tests against script.js content...');
+                    console.log('🧪 Script content preview:', (scriptContent || '').substring(0, 200));
+                    
+                    // Run the tests with the student's script.js content (or empty string if none)
+                    const scriptToTest = scriptContent || '';
+                    const result = runTestsFunc(scriptToTest);
+                    console.log('🧪 Test result:', result);
+                    
+                    if (result === "All tests passed!") {
+                      testsPassed = true;
+                    } else {
+                      testsPassed = false;
+                      testErrors.push(result);
+                    }
+                  }
+                  // Check if this is a runTest() function pattern
+                  else if (hasRunTestFunction) {
+                    console.log('🧪 Detected runTest() function pattern - DOM-based test');
+                    isRunTestsPattern = true;
+
+                    // Set up Node.js globals for runTest execution
+                    const nodeGlobals = {
+                      module: { exports: {}, id: 'test.js', filename: 'test.js', loaded: false, children: [], paths: ['/node_modules'], path: '/' } as any,
+                      exports: {},
+                      __dirname: '/',
+                      __filename: 'test.js',
+                      global: globalThis,
+                      require: ((moduleName: string) => {
+                        console.log(`🧪 require() called for: ${moduleName}`);
+                        if (moduleName === 'fs') {
+                          return {
+                            readFileSync: (path: string) => {
+                              if (path === 'index.html' || path === './index.html') return htmlContent || '<html><body></body></html>';
+                              if (path === 'script.js' || path === './script.js') return scriptContent || '// No script content';
+                              if (path === 'style.css' || path === './style.css' || path === 'styles.css' || path === './styles.css') return cssContent || '';
+                              throw new Error(`File '${path}' not found`);
+                            },
+                            existsSync: (path: string) => ['index.html', 'script.js', 'style.css', 'styles.css'].includes(path) ||
+                                                         ['./index.html', './script.js', './style.css', './styles.css'].includes(path)
+                          };
+                        }
+                        if (moduleName === 'assert') {
+                          return {
+                            equal: (actual: any, expected: any, message?: string) => {
+                              if (actual !== expected) {
+                                throw new Error(message || `Assertion failed: ${actual} !== ${expected}`);
+                              }
+                            },
+                            strictEqual: (actual: any, expected: any, message?: string) => {
+                              if (actual !== expected) {
+                                throw new Error(message || `Strict assertion failed: ${actual} !== ${expected}`);
+                              }
+                            },
+                            ok: (value: any, message?: string) => {
+                              if (!value) {
+                                throw new Error(message || `Assertion failed: ${value} is not truthy`);
+                              }
+                            }
+                          };
+                        }
+                        if (moduleName === 'jsdom') {
+                          return {
+                            JSDOM: class {
+                              constructor(html: string) {
+                                return {
+                                  window: {
+                                    document: {
+                                      documentElement: {
+                                        outerHTML: html
+                                      },
+                                      querySelector: (selector: string) => {
+                                        // Simple mock implementation for common selectors
+                                        if (selector === 'html') return { tagName: 'HTML', outerHTML: html };
+                                        if (selector === 'head') return { tagName: 'HEAD', outerHTML: '<head></head>' };
+                                        if (selector === 'body') return { tagName: 'BODY', outerHTML: '<body></body>' };
+                                        if (selector === 'title') {
+                                          const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+                                          return { tagName: 'TITLE', textContent: titleMatch ? titleMatch[1] : '' };
+                                        }
+                                        if (selector === 'h1') {
+                                          const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                                          return { tagName: 'H1', textContent: h1Match ? h1Match[1] : '' };
+                                        }
+                                        if (selector === 'img') return {
+                                          tagName: 'IMG',
+                                          alt: '',
+                                          src: '',
+                                          querySelector: () => null,
+                                          querySelectorAll: () => []
+                                        };
+                                        return null;
+                                      },
+                                      querySelectorAll: (selector: string) => {
+                                        // Simple mock implementation
+                                        if (selector === 'a') {
+                                          const links = html.match(/<a[^>]*>/g) || [];
+                                          return links.map(link => ({ tagName: 'A', href: '', textContent: '' }));
+                                        }
+                                        return [];
+                                      }
+                                    }
+                                  }
+                                };
+                              }
+                            }
+                          };
+                        }
+                        throw new Error(`Module '${moduleName}' not found`);
+                      }) as any
+                    };
+
+                    // Create mock DOM for testing
+                    const parser = new DOMParser();
+                    const mockDoc = parser.parseFromString(htmlContent, 'text/html');
+                    
+                    // Ensure mockDoc has all necessary properties
+                    console.log('[StackBlitz] Mock document created:', {
+                      hasQuerySelector: typeof mockDoc.querySelector === 'function',
+                      hasDocumentElement: !!mockDoc.documentElement,
+                      tagName: mockDoc.documentElement?.tagName
+                    });
+
+                    // Temporarily replace document and execute test
+                    const originalDocument = globalThis.document;
+                    const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+                    const originalAssert = console.assert;
+                    let documentReplaced = false;
+
+                    try {
+                      // Set up Node.js globals
+                      globalThis.module = nodeGlobals.module;
+                      globalThis.exports = nodeGlobals.exports;
+                      globalThis.__dirname = nodeGlobals.__dirname;
+                      globalThis.__filename = nodeGlobals.__filename;
+                      globalThis.global = nodeGlobals.global;
+                      globalThis.require = nodeGlobals.require;
+
+                      // Try to replace document with mock, but handle non-configurable properties
+                      try {
+                        Object.defineProperty(globalThis, 'document', {
+                          value: mockDoc,
+                          writable: true,
+                          configurable: true
+                        });
+                        documentReplaced = true;
+                      } catch (defineError) {
+                        console.warn('🧪 Could not redefine document property, using alternative approach');
+                        // If we can't redefine document, we'll need to modify the test execution
+                        documentReplaced = false;
+                      }
+
+                      // Execute the test code
+                      let testFunctionCode;
+
+                      // Always pass document as parameter to ensure it's available
+                      testFunctionCode = new Function(`
+                        "use strict";
+
+                        // Set up Node.js globals if needed
+                        if (arguments[0]) {
+                          globalThis.module = arguments[0].module;
+                          globalThis.exports = arguments[0].exports;
+                          globalThis.__dirname = arguments[0].__dirname;
+                          globalThis.__filename = arguments[0].__filename;
+                          globalThis.global = arguments[0].global;
+                          globalThis.require = arguments[0].require;
+                        }
+
+                        // Set up assertion tracking
+                        let assertionCount = 0;
+
+                        // Override console.assert to throw on first failure
+                        console.assert = function(condition, message) {
+                          assertionCount++;
+                          if (!condition) {
+                            const errorMessage = message || 'Assertion failed';
+                            console.error('🧪 Assertion failed:', errorMessage);
+                            throw new Error(errorMessage);
+                          } else {
+                            console.log('🧪 Assertion passed:', message || 'Assertion passed');
+                          }
+                        };
+
+                        // Ensure document is available in multiple ways
+                        const document = arguments[1] || globalThis.document;
+
+                        // Make document available globally as well for safety
+                        if (arguments[1] && typeof globalThis.document === 'undefined') {
+                          globalThis.document = arguments[1];
+                        }
+
+                        // Inject student's script.js code directly into the test execution context
+                        const scriptContent = arguments[2];
+                        if (scriptContent && scriptContent.trim()) {
+                          console.log('🧪 Injecting student code into test context:', scriptContent.substring(0, 100) + '...');
+                          // We'll inject the student code directly into the test code instead of using eval
+                        }
+
+                        // Execute student code first within the test context
+                        ${scriptContent ? scriptContent + '\n' : ''}
+
+                        ${testCode}
+                        return { runTest: runTest, assertionCount: assertionCount };
+                      `);
+
+                      const testResult = testFunctionCode(nodeGlobals, mockDoc);
+                      const runTestFunc = testResult.runTest;
+                      const assertionCount = testResult.assertionCount;
+
+                      console.log('🧪 runTest function extracted successfully');
+                      console.log('🧪 Running DOM-based tests with Node.js globals...');
+                      console.log('🧪 Document available in context:', {
+                        globalDocument: typeof globalThis.document,
+                        hasQuerySelector: typeof globalThis.document?.querySelector === 'function',
+                        documentReplaced
+                      });
+
+                      // Run the tests
+                      if (!runTestFunc) {
+                        throw new Error('Failed to extract runTest function');
+                      }
+
+                      try {
+                        // Check if runTest expects studentCode parameter
+                        const runTestStr = runTestFunc.toString();
+                        const expectsParameter = /function\s*\w*\s*\(\s*\w+\s*\)/.test(runTestStr) || /^\s*\(\s*\w+\s*\)\s*=>/.test(runTestStr);
+                        
+                        let result;
+                        if (expectsParameter) {
+                          console.log('🧪 runTest expects studentCode parameter, passing script content...');
+                          result = runTestFunc(scriptContent);
+                        } else {
+                          console.log('🧪 runTest expects no parameters, calling without args...');
+                          result = runTestFunc();
+                        }
+                        
+                        console.log('🧪 Test result:', result);
+                        console.log('🧪 Assertion tracking:', { assertionCount });
+
+                        // Check if result is a string (success or error message)
+                        if (typeof result === 'string') {
+                          if (result.startsWith('✅') || result.includes('passed') || result.includes('great')) {
+                            testsPassed = true;
+                            console.log('🧪 Tests PASSED from string result');
+                          } else if (result.startsWith('❌') || result.includes('failed')) {
+                            testsPassed = false;
+                            // Extract the actual error message after the emoji and prefix
+                            const errorMessage = result.replace(/^❌\s*Tests failed:\s*/i, '').trim();
+                            testErrors.push(errorMessage);
+                            console.log('🧪 Tests FAILED from string result');
+                          } else {
+                            testsPassed = false;
+                            testErrors.push(result);
+                            console.log('🧪 Tests FAILED - unknown string result');
+                          }
+                        }
+                        // If we get here, all assertions passed (since we throw on first failure)
+                        else if (result && result.success === true) {
+                          testsPassed = true;
+                          console.log('🧪 Tests PASSED from runTest return value');
+                        } else if (result && result.success === false) {
+                          testsPassed = false;
+                          testErrors.push(result.message || 'Test failed');
+                          console.log('🧪 Tests FAILED from runTest return value');
+                        } else if (assertionCount === 0 && typeof result !== 'string') {
+                          // No assertions were executed and no string result
+                          if (result && result.success === true) {
+                            testsPassed = true;
+                            console.log('🧪 Tests PASSED - no assertions but runTest returned success');
+                          } else {
+                            testsPassed = false;
+                            testErrors.push('No assertions were executed and runTest did not return success');
+                            console.log('🧪 Tests FAILED - no assertions and no success result');
+                          }
+                        } else if (assertionCount > 0) {
+                          // All assertions passed
+                          testsPassed = true;
+                          console.log('🧪 Tests PASSED - all assertions passed');
+                        }
+                      } catch (assertError) {
+                        // Handle assertion failure that threw an error
+                        testsPassed = false;
+                        const errorMessage = assertError instanceof Error ? assertError.message : String(assertError);
+                        testErrors.push(errorMessage);
+                        console.log('🧪 Tests FAILED due to assertion error:', errorMessage);
+                      }
+
+                    } finally {
+                      // Restore original console.assert
+                      console.assert = originalAssert;
+
+                      // Restore original document only if we successfully replaced it
+                      if (documentReplaced && originalDocumentDescriptor) {
+                        try {
+                          Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
+                        } catch (restoreError) {
+                          console.warn('🧪 Could not restore original document property');
+                        }
+                      } else if (documentReplaced && originalDocument) {
+                        try {
+                          Object.defineProperty(globalThis, 'document', {
+                            value: originalDocument,
+                            writable: true,
+                            configurable: true
+                          });
+                        } catch (restoreError) {
+                          console.warn('🧪 Could not restore original document property');
+                        }
+                      }
+                    }
+                  }
+                  // Check if this is a custom assert() function pattern
+                  else if (hasAssertFunction && !hasConsoleAsserts && !hasRequireAssert) {
+                    console.log('🧪 Detected custom assert() function pattern');
+                    isRunTestsPattern = true;
+                    
+                    // Execute test code with custom assert
+                    try {
+                      const testExecutor = new Function(`
+                        "use strict";
+                        const scriptContent = arguments[0] || '';
+                        const htmlContent = arguments[1] || '';
+                        const cssContent = arguments[2] || '';
+                        
+                        ${testCode}
+                        
+                        // Return success if no errors thrown
+                        return "All tests passed!";
+                      `);
+                      
+                      const result = testExecutor(scriptContent || '', htmlContent || '', cssContent || '');
+                      console.log('🧪 Custom assert test result:', result);
+                      
+                      if (result === "All tests passed!") {
+                        testsPassed = true;
+                        } else {
+                        testsPassed = false;
+                        testErrors.push(result);
+                      }
+                    } catch (error) {
+                      const errMsg = error instanceof Error ? error.message : String(error);
+                      console.error('🧪 Custom assert test failed:', errMsg);
+                      testsPassed = false;
+                      testErrors.push(errMsg);
+                    }
+                  }
+                  
+                  // Only run console.assert tests if NOT a runTests pattern
+                  if (!isRunTestsPattern) {
+                    try {
+                      // Simple globals for test execution
+                      const simpleGlobals = {
                     require: (moduleName: string) => {
                       console.log(`🧪 require() called for: ${moduleName}`);
                       if (moduleName === 'fs') {
                         return {
                           readFileSync: (path: string) => {
                             if (path === 'index.html' || path === './index.html') return htmlContent || '<html><body></body></html>';
-                            if (path === 'script.js' || path === './script.js') return scriptContent || '';
+                            if (path === 'script.js' || path === './script.js') return scriptContent || '// No script content';
                             if (path === 'style.css' || path === './style.css' || path === 'styles.css' || path === './styles.css') return cssContent || '';
                             throw new Error(`File '${path}' not found`);
                           },
@@ -977,24 +1364,38 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                               return {
                                 window: {
                                   document: {
+                                    documentElement: {
+                                      outerHTML: html
+                                    },
                                     querySelector: (selector: string) => {
+                                      // Simple mock implementation for common selectors
+                                      if (selector === 'html') return { tagName: 'HTML', outerHTML: html };
+                                      if (selector === 'head') return { tagName: 'HEAD', outerHTML: '<head></head>' };
+                                      if (selector === 'body') return { tagName: 'BODY', outerHTML: '<body></body>' };
                                       if (selector === 'title') {
-                                        const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-                                        return match ? { textContent: match[1] } : null;
+                                        const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+                                        return { tagName: 'TITLE', textContent: titleMatch ? titleMatch[1] : '' };
                                       }
                                       if (selector === 'h1') {
-                                        const match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-                                        return match ? { textContent: match[1] } : null;
+                                        const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+                                        return { tagName: 'H1', textContent: h1Match ? h1Match[1] : '' };
                                       }
-                                      if (selector === 'img') {
-                                        const match = html.match(/<img([^>]*)>/i);
-                                        if (match) {
-                                          const altMatch = match[1].match(/alt=["']([^"']*)["']/i);
-                                          return { alt: altMatch ? altMatch[1] : '' };
-                                        }
-                                        return null;
-                                      }
+                                      if (selector === 'img') return {
+                                        tagName: 'IMG',
+                                        alt: '',
+                                        src: '',
+                                        querySelector: () => null,
+                                        querySelectorAll: () => []
+                                      };
                                       return null;
+                                    },
+                                    querySelectorAll: (selector: string) => {
+                                      // Simple mock implementation
+                                      if (selector === 'a') {
+                                        const links = html.match(/<a[^>]*>/g) || [];
+                                        return links.map(link => ({ tagName: 'A', href: '', textContent: '' }));
+                                      }
+                                      return [];
                                     }
                                   }
                                 }
@@ -1060,7 +1461,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                     // At least one assertion failed
                     testsPassed = false;
                     console.log('🧪 Tests FAILED: Some assertions failed');
-                  } else {
+                        } else {
                     // Check the return value from test execution
                     if (testResult === true || testResult === 'passed' || testResult === 'success') {
                       testsPassed = true;
@@ -1081,20 +1482,29 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                     }
                   }
 
-                } catch (error) {
-                  console.log('🧪 Test execution caught error:', error);
-                  console.log('🧪 Error type:', typeof error);
-                  const errorMessage = error instanceof Error ? error.message : String(error);
-                  console.log('🧪 Error message:', errorMessage);
-                  console.log('🧪 Error stack:', error instanceof Error ? error.stack : 'No stack');
-                  testsPassed = false;
+                    } catch (error) {
+                      console.log('🧪 Test execution caught error:', error);
+                      console.log('🧪 Error type:', typeof error);
+                      const errorMessage = error instanceof Error ? error.message : String(error);
+                      console.log('🧪 Error message:', errorMessage);
+                      console.log('🧪 Error stack:', error instanceof Error ? error.stack : 'No stack');
+                      testsPassed = false;
 
-                  // Check if this is an assertion failure with a specific message
-                  if (errorMessage && errorMessage.includes('Assertion failed')) {
-                    testErrors.push(errorMessage);
-                  } else {
-                    testErrors.push(errorMessage || 'Test execution failed');
-                  }
+                      // Check if this is an assertion failure with a specific message
+                      if (errorMessage && errorMessage.includes('Assertion failed')) {
+                        testErrors.push(errorMessage);
+                        } else {
+                        testErrors.push(errorMessage || 'Test execution failed');
+                      }
+                    }
+                  } // End of if (!isRunTestsPattern)
+
+                } catch (outerError) {
+                  // Handle errors from runTests pattern or other setup issues
+                  const errMsg = outerError instanceof Error ? outerError.message : String(outerError);
+                  console.error('🧪 Test setup/execution error:', errMsg);
+                  testsPassed = false;
+                  testErrors.push(errMsg);
                 }
 
                 const resultMessage = testsPassed ? 'All tests passed!' : `Tests failed: ${testErrors.join(', ')}`;
@@ -1125,7 +1535,7 @@ export function StackBlitzToggle({ document, className = "", testJS }: StackBlit
                   console.log('[StackBlitz] Updated React state');
 
                   // Dispatch event for other components
-                  if (typeof window !== 'undefined') {
+                        if (typeof window !== 'undefined') {
                     const eventDetail = { slug: challengeSlug };
                     console.log('[StackBlitz] Dispatching item-completed event:', eventDetail);
                     window.dispatchEvent(new CustomEvent('item-completed', { detail: eventDetail }));
@@ -1464,80 +1874,6 @@ console.log('Make sure to save your work first.');`;
                     </Button>
                   )}
                   
-                  <Button
-                    onClick={() => {
-                      console.log('[StackBlitz] Manual refresh triggered');
-
-                      // Try to refresh the StackBlitz editor
-                      if (vm && vm.editor) {
-                        console.log('[StackBlitz] Refreshing editor...');
-                        if (typeof vm.editor.refresh === 'function') {
-                          vm.editor.refresh();
-                        }
-                        if (typeof vm.editor.focus === 'function') {
-                          vm.editor.focus();
-                        }
-                      } else {
-                        console.warn('[StackBlitz] VM instance not available for refresh');
-                        // Try to force re-embed
-                        setIsEmbedded(false);
-                      }
-                    }}
-                    size="sm"
-                    variant="outline"
-                    className="flex items-center gap-1"
-                    title="Refresh StackBlitz editor if content isn't loading"
-                  >
-                    <AlertCircle className="h-3 w-3" />
-                    Refresh
-                  </Button>
-                  
-                  <Button
-                    onClick={() => {
-                      console.log('[StackBlitz] Debug info...');
-                      
-                      // Check if we're in a browser environment
-                      if (typeof window === 'undefined') {
-                        console.log('[StackBlitz] Not in browser environment');
-                        return;
-                      }
-                      
-                      console.log('[StackBlitz] Browser environment:', {
-                        window: typeof window,
-                        document: typeof document,
-                        localStorage: typeof localStorage,
-                        projectId: projectId,
-                        stackblitzUrl: stackblitzUrl
-                      });
-                      
-                      // Try to find iframe without complex DOM queries
-                      try {
-                        const iframe = document.querySelector('iframe[src*="stackblitz"]');
-                        if (iframe) {
-                          console.log('[StackBlitz] Iframe found:', iframe.src);
-                          console.log('[StackBlitz] Iframe accessible:', !!iframe.contentWindow);
-                        } else {
-                          console.log('[StackBlitz] No StackBlitz iframe found');
-                        }
-                      } catch (e) {
-                        console.log('[StackBlitz] Iframe detection failed:', e);
-                      }
-                      
-                      // Show localStorage info
-                      const snapshot = localStorage.getItem(`stackblitz-snapshot-${projectId}`);
-                      if (snapshot) {
-                        console.log('[StackBlitz] Existing snapshot:', JSON.parse(snapshot));
-                      } else {
-                        console.log('[StackBlitz] No existing snapshot');
-                      }
-                    }}
-                    size="sm"
-                    variant="outline"
-                    className="flex items-center gap-1"
-                  >
-                    <AlertCircle className="h-3 w-3" />
-                    Debug
-                  </Button>
                 </div>
               </div>
             </div>

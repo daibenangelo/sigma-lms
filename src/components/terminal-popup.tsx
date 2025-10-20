@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { X, Copy, Play, Terminal, Code, Move } from "lucide-react";
+import { X, Terminal } from "lucide-react";
 
 interface TerminalPopupProps {
   isOpen: boolean;
@@ -13,16 +13,12 @@ interface TerminalPopupProps {
 
 export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: TerminalPopupProps) {
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
-  const [currentCommand, setCurrentCommand] = useState('');
-  const [commandHistory, setCommandHistory] = useState<string[]>([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 50, y: 50 });
   const [isLoading, setIsLoading] = useState(false);
   const [executionCount, setExecutionCount] = useState(0);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
 
@@ -83,8 +79,6 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
                               scriptContent.includes('console.log(\'Hello from StackBlitz!\')');
 
         if (!isDefaultContent) {
-          console.log('[Terminal] Executing script on terminal open');
-
           // Store original console methods
           const originalConsole = {
             log: console.log,
@@ -136,9 +130,6 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
             // Set the captured logs
             setConsoleLogs(capturedLogs);
 
-            console.log('[Terminal] Script execution completed');
-            console.log('[Terminal] Captured logs count:', capturedLogs.length);
-            console.log('[Terminal] First few captured logs:', capturedLogs.slice(0, 3));
 
           } catch (error) {
             console.error('Failed to execute script:', error);
@@ -191,12 +182,7 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
           ]);
         } else {
           // Show code execution message and console output
-          console.log('[Terminal] Display useEffect - consoleLogs:', consoleLogs);
-          console.log('[Terminal] Display useEffect - consoleLogs length:', consoleLogs.length);
-
           const filteredLogs = consoleLogs.filter(log => !log.includes('[Terminal]'));
-          console.log('[Terminal] Display useEffect - filtered logs:', filteredLogs);
-          console.log('[Terminal] Display useEffect - script content length:', scriptContent.length);
 
           // If no console output, check if script has any console statements
           const hasConsoleStatements = scriptContent.includes('console.log') ||
@@ -232,12 +218,10 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
         '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
         '',
         '📋 No code to run.',
-        '💡 Write some code in the editor and click "Run" to see it here.',
-        '',
-        'Commands: help, clear'
+        '💡 Write some code in the editor and click "Run" to see it here.'
       ]);
     }
-  }, [isOpen, scriptContent, consoleLogs, executionCount]);
+  }, [isOpen, scriptContent, executionCount]);
 
   // Auto-scroll to bottom when output changes
   useEffect(() => {
@@ -246,78 +230,7 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
     }
   }, [terminalOutput]);
 
-  const handleCommandSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
 
-    if (!currentCommand.trim()) return;
-
-    // Add command to history
-    setCommandHistory(prev => [...prev, currentCommand]);
-    setHistoryIndex(-1);
-
-    // Process command
-    let output = '';
-    const cmd = currentCommand.trim().toLowerCase();
-
-    if (cmd === 'node script.js') {
-      output = `> ${currentCommand}\n\n✅ Running your code...\n\n` +
-               `Your code is running! Check the console for any output.\n` +
-               `💡 To run this in StackBlitz: Click the terminal tab below and type:\n` +
-               `   node script.js\n\n`;
-    } else if (cmd === 'npm run dev') {
-      output = `> ${currentCommand}\n\n🚀 Starting development server...\n\n` +
-               `Your development server would start here.\n` +
-               `Check the actual terminal for real output.\n\n`;
-    } else if (cmd === 'help' || cmd === '?') {
-      output = `> ${currentCommand}\n\n` +
-               `Available commands:\n` +
-               `• node script.js     - Run your JavaScript code\n` +
-               `• npm run dev       - Start development server\n` +
-               `• clear             - Clear this window\n` +
-               `• help              - Show this help\n\n` +
-               `💡 This shows your code. To run it for real:\n` +
-               `   1. Click the terminal tab at the bottom\n` +
-               `   2. Type: node script.js\n\n`;
-    } else if (cmd === 'clear') {
-      setTerminalOutput(['Code Runner cleared.\n']);
-      setConsoleLogs([]);
-      setCurrentCommand('');
-      return;
-    } else {
-      output = `> ${currentCommand}\n\n` +
-               `❓ Command not recognized.\n` +
-               `Type 'help' for available commands.\n\n`;
-    }
-
-    setTerminalOutput(prev => [...prev, output]);
-    setCurrentCommand('');
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (historyIndex < commandHistory.length - 1) {
-        const newIndex = historyIndex + 1;
-        setHistoryIndex(newIndex);
-        setCurrentCommand(commandHistory[commandHistory.length - 1 - newIndex]);
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (historyIndex > 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setCurrentCommand(commandHistory[commandHistory.length - 1 - newIndex]);
-      } else if (historyIndex === 0) {
-        setHistoryIndex(-1);
-        setCurrentCommand('');
-      }
-    }
-  };
-
-  const copyScript = () => {
-    navigator.clipboard.writeText(scriptContent);
-    setTerminalOutput(prev => [...prev, '📋 script.js content copied to clipboard!\n']);
-  };
 
   if (!isOpen) return null;
 
@@ -346,15 +259,6 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
             <h2 className="text-lg font-semibold">Code Runner</h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              onClick={copyScript}
-              size="sm"
-              variant="outline"
-              className="text-gray-300 border-gray-600 hover:bg-gray-800"
-            >
-              <Copy className="h-3 w-3 mr-1" />
-              Copy Code
-            </Button>
             <Button
               onClick={onClose}
               size="sm"
@@ -387,31 +291,6 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
           )}
         </div>
 
-        {/* Command Input */}
-        <form onSubmit={handleCommandSubmit} className="p-4 border-t border-gray-700" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-2">
-            <span className="text-green-400 font-mono">$</span>
-            <textarea
-              ref={textareaRef}
-              value={currentCommand}
-              onChange={(e) => setCurrentCommand(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1 bg-transparent border-none outline-none text-gray-100 font-mono text-sm resize-none"
-              placeholder="Type commands here..."
-              rows={1}
-              style={{ minHeight: '20px' }}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 text-white"
-              disabled={!currentCommand.trim()}
-            >
-              <Play className="h-3 w-3 mr-1" />
-              Run
-            </Button>
-          </div>
-        </form>
         </div>
       </div>
     </>

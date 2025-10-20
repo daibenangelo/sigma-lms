@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   try {
     // Try different content types for challenges
-    const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment', 'project'];
+    const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment'];
     let challengeEntry = null;
 
     for (const contentType of challengeContentTypes) {
@@ -110,7 +110,7 @@ export default async function ChallengePage({ params, searchParams }: { params: 
   let challengeData: any = null;
   try {
     // Try different content types for challenges
-    const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment', 'project'];
+    const challengeContentTypes = ['lessonChallenge', 'challenge', 'assignment'];
     let challengeEntry = null;
     
     for (const contentType of challengeContentTypes) {
