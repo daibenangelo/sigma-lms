@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,9 @@ import {
   Activity,
   User,
   LogOut,
-  LogIn
+  LogIn,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { useApiCounter } from "@/contexts/api-counter-context";
 import { useLessonsFetch } from "@/hooks/use-cached-fetch";
@@ -53,6 +55,52 @@ export function Navbar() {
       hasAccessToken: !!session?.access_token
     });
   }, [user, session, loading]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!isClient || !content.length) return;
+
+    const navigateToItem = (item: ContentItem) => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const course = urlParams.get('course') || '';
+      const href = item.type === 'quiz' ? `/quiz/${item.slug}?course=${course}` :
+                  item.type === 'tutorial' ? `/tutorial/${item.slug}?course=${course}` :
+                  item.type === 'challenge' ? `/challenge/${item.slug}?course=${course}` :
+                  `/lesson/${item.slug}?course=${course}`;
+      window.location.href = href;
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle navigation if no input/textarea is focused
+      if (event.target instanceof HTMLInputElement ||
+          event.target instanceof HTMLTextAreaElement ||
+          event.target instanceof HTMLSelectElement) {
+        return;
+      }
+
+      const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
+      const currentItemIndex = content.findIndex(item => item.slug === currentSlug);
+      const hasPrevious = currentItemIndex > 0;
+      const hasNext = currentItemIndex < content.length - 1;
+
+      if (event.key === 'ArrowLeft' && hasPrevious) {
+        event.preventDefault();
+        const previousItem = content[currentItemIndex - 1];
+        if (previousItem) {
+          navigateToItem(previousItem);
+        }
+      } else if (event.key === 'ArrowRight' && hasNext) {
+        event.preventDefault();
+        const nextItem = content[currentItemIndex + 1];
+        if (nextItem) {
+          navigateToItem(nextItem);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isClient, content, pathname]);
 
   // Removed navbar-level auth checking - middleware handles this
 
@@ -104,6 +152,45 @@ export function Navbar() {
 
   const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
   const currentCourse = getCurrentCourse();
+
+  // Navigation logic for next/previous items
+  const navigationData = useMemo(() => {
+    const currentItemIndex = content.findIndex(item => item.slug === currentSlug);
+    const currentItem = currentItemIndex !== -1 ? content[currentItemIndex] : null;
+    const hasPrevious = currentItemIndex > 0;
+    const hasNext = currentItemIndex < content.length - 1;
+
+    return {
+      currentItemIndex,
+      currentItem,
+      hasPrevious,
+      hasNext,
+      previousItem: hasPrevious ? content[currentItemIndex - 1] : null,
+      nextItem: hasNext ? content[currentItemIndex + 1] : null
+    };
+  }, [content, currentSlug]);
+
+  const navigateToItem = (item: ContentItem) => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const course = urlParams.get('course') || '';
+    const href = item.type === 'quiz' ? `/quiz/${item.slug}?course=${course}` :
+                item.type === 'tutorial' ? `/tutorial/${item.slug}?course=${course}` :
+                item.type === 'challenge' ? `/challenge/${item.slug}?course=${course}` :
+                `/lesson/${item.slug}?course=${course}`;
+    window.location.href = href;
+  };
+
+  const goToPrevious = () => {
+    if (navigationData.previousItem) {
+      navigateToItem(navigationData.previousItem);
+    }
+  };
+
+  const goToNext = () => {
+    if (navigationData.nextItem) {
+      navigateToItem(navigationData.nextItem);
+    }
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -168,54 +255,106 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-4">
-            {isClient && content.length > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="flex items-center space-x-2">
-                    <span>Course Content</span>
-                    <ChevronDown className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto">
-                  {content.map((item, index) => {
-                    const isLesson = item.type === 'lesson';
-                    const isTutorial = item.type === 'tutorial';
-                    const isQuiz = item.type === 'quiz';
-                    const isChallenge = item.type === 'challenge';
-                    
-                    const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : 
-                                isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : 
-                                isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : 
-                                `/lesson/${item.slug}?course=${currentCourse}`;
+            {isClient && content.length > 0 && navigationData.currentItem && (
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToPrevious}
+                  disabled={!navigationData.hasPrevious}
+                  className="flex items-center space-x-1 px-3"
+                  aria-label={`Go to previous item: ${navigationData.previousItem?.title || ''}`}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  <span className="hidden sm:inline">Previous</span>
+                </Button>
 
-                    const isActive = currentSlug === item.slug;
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <div className="flex items-center space-x-2 px-3 py-2 bg-gray-50 rounded-md border cursor-pointer hover:bg-gray-100 transition-colors">
+                      <div className="flex-shrink-0">
+                        {getIcon(navigationData.currentItem.type)}
+                      </div>
+                      <div className="flex-1 min-w-0 text-center">
+                        <p className="text-sm font-medium truncate">{navigationData.currentItem.title}</p>
+                        <div className="flex items-center justify-center space-x-2">
+                          <p className="text-xs text-gray-500">
+                            {getTypeLabel(navigationData.currentItem.type)}
+                          </p>
+                          <span className="text-xs text-gray-400">•</span>
+                          <p className="text-xs text-gray-500">
+                            {navigationData.currentItemIndex + 1} of {content.length}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                      {navigationData.currentItem.type === 'challenge' && (
+                        <Badge variant="destructive" className="text-xs">
+                          Challenge
+                        </Badge>
+                      )}
+                    </div>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="center" className="w-80 max-h-96 overflow-y-auto">
+                    {content.map((item, index) => {
+                      const isLesson = item.type === 'lesson';
+                      const isTutorial = item.type === 'tutorial';
+                      const isQuiz = item.type === 'quiz';
+                      const isChallenge = item.type === 'challenge';
 
-                    return (
-                      <DropdownMenuItem key={index} asChild>
-                        <Link
-                          href={href}
-                          className="flex items-center space-x-3 p-3"
-                        >
-                          <div className="flex-shrink-0">
-                            {getIcon(item.type)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{item.title}</p>
-                            <p className="text-xs text-gray-500">
-                              {getTypeLabel(item.type)}
-                            </p>
-                          </div>
-                          {isChallenge && (
-                            <Badge variant="destructive" className="text-xs">
-                              Challenge
-                            </Badge>
-                          )}
-                        </Link>
-                      </DropdownMenuItem>
-                    );
-                  })}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      const urlParams = new URLSearchParams(window.location.search);
+                      const course = urlParams.get('course') || '';
+                      const href = isQuiz ? `/quiz/${item.slug}?course=${course}` :
+                                  isTutorial ? `/tutorial/${item.slug}?course=${course}` :
+                                  isChallenge ? `/challenge/${item.slug}?course=${course}` :
+                                  `/lesson/${item.slug}?course=${course}`;
+
+                      const isActive = navigationData.currentItem?.slug === item.slug;
+
+                      return (
+                        <DropdownMenuItem key={index} asChild>
+                          <Link
+                            href={href}
+                            className={`flex items-center space-x-3 p-3 ${isActive ? 'bg-blue-50' : ''}`}
+                          >
+                            <div className="flex-shrink-0">
+                              {getIcon(item.type)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm font-medium truncate ${isActive ? 'text-blue-900' : ''}`}>
+                                {item.title}
+                              </p>
+                              <p className={`text-xs ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
+                                {getTypeLabel(item.type)}
+                              </p>
+                            </div>
+                            {isChallenge && (
+                              <Badge variant="destructive" className="text-xs">
+                                Challenge
+                              </Badge>
+                            )}
+                            {isActive && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full ml-2" />
+                            )}
+                          </Link>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToNext}
+                  disabled={!navigationData.hasNext}
+                  className="flex items-center space-x-1 px-3"
+                  aria-label={`Go to next item: ${navigationData.nextItem?.title || ''}`}
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             )}
 
             {/* Auth Section */}
@@ -286,44 +425,122 @@ export function Navbar() {
         {/* Mobile Navigation */}
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 py-4">
-            <div className="space-y-2">
-              {content.map((item, index) => {
-                const isLesson = item.type === 'lesson';
-                const isTutorial = item.type === 'tutorial';
-                const isQuiz = item.type === 'quiz';
-                const isChallenge = item.type === 'challenge';
-                
-                const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : 
-                            isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : 
-                            isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : 
-                            `/lesson/${item.slug}?course=${currentCourse}`;
+            <div className="space-y-4">
+              {/* Navigation Controls */}
+              {content.length > 0 && navigationData.currentItem && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        goToPrevious();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      disabled={!navigationData.hasPrevious}
+                      className="flex items-center space-x-1"
+                      aria-label={`Go to previous item: ${navigationData.previousItem?.title || ''}`}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      <span>Previous</span>
+                    </Button>
 
-                const isActive = currentSlug === item.slug;
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        goToNext();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      disabled={!navigationData.hasNext}
+                      className="flex items-center space-x-1"
+                      aria-label={`Go to next item: ${navigationData.nextItem?.title || ''}`}
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
 
-                return (
-                  <Link
-                    key={index}
-                    href={href}
-                    className="flex items-center space-x-3 p-3 rounded-lg transition-colors"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <div className="flex-shrink-0">
-                      {getIcon(item.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.title}</p>
-                      <p className="text-xs text-gray-500">
-                        {getTypeLabel(item.type)}
-                      </p>
-                    </div>
-                    {isChallenge && (
-                      <Badge variant="destructive" className="text-xs">
-                        Challenge
-                      </Badge>
-                    )}
-                  </Link>
-                );
-              })}
+                  {/* Course Content Dropdown */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-gray-900 px-3">Course Content</p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border cursor-pointer hover:bg-gray-100 transition-colors mx-2">
+                          <div className="flex-shrink-0">
+                            {getIcon(navigationData.currentItem.type)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{navigationData.currentItem.title}</p>
+                            <div className="flex items-center space-x-2">
+                              <p className="text-xs text-gray-500">
+                                {getTypeLabel(navigationData.currentItem.type)}
+                              </p>
+                              <span className="text-xs text-gray-400">•</span>
+                              <p className="text-xs text-gray-500">
+                                {navigationData.currentItemIndex + 1} of {content.length}
+                              </p>
+                            </div>
+                          </div>
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                          {navigationData.currentItem.type === 'challenge' && (
+                            <Badge variant="destructive" className="text-xs">
+                              Challenge
+                            </Badge>
+                          )}
+                        </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center" className="w-80 max-h-96 overflow-y-auto">
+                        {content.map((item, index) => {
+                          const isLesson = item.type === 'lesson';
+                          const isTutorial = item.type === 'tutorial';
+                          const isQuiz = item.type === 'quiz';
+                          const isChallenge = item.type === 'challenge';
+
+                          const urlParams = new URLSearchParams(window.location.search);
+                          const course = urlParams.get('course') || '';
+                          const href = isQuiz ? `/quiz/${item.slug}?course=${course}` :
+                                      isTutorial ? `/tutorial/${item.slug}?course=${course}` :
+                                      isChallenge ? `/challenge/${item.slug}?course=${course}` :
+                                      `/lesson/${item.slug}?course=${course}`;
+
+                          const isActive = navigationData.currentItem?.slug === item.slug;
+
+                          return (
+                            <DropdownMenuItem key={index} asChild>
+                              <Link
+                                href={href}
+                                className={`flex items-center space-x-3 p-3 ${isActive ? 'bg-blue-50' : ''}`}
+                                onClick={() => setIsMobileMenuOpen(false)}
+                              >
+                                <div className="flex-shrink-0">
+                                  {getIcon(item.type)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`text-sm font-medium truncate ${isActive ? 'text-blue-900' : ''}`}>
+                                    {item.title}
+                                  </p>
+                                  <p className={`text-xs ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
+                                    {getTypeLabel(item.type)}
+                                  </p>
+                                </div>
+                                {isChallenge && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    Challenge
+                                  </Badge>
+                                )}
+                                {isActive && (
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full ml-2" />
+                                )}
+                              </Link>
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              )}
 
               {/* Mobile Back to Course */}
               {isClient && currentCourse && (

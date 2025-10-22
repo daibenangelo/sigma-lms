@@ -284,7 +284,7 @@ function FusedCourseContent({
                   <span className="ml-2 text-gray-600">Loading course content...</span>
                 </div>
               ) : courseContent ? (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {courseContent.allContent.map((item, index) => {
                     const isLesson = item.type === 'lesson';
                     const isTutorial = item.type === 'tutorial';
@@ -294,36 +294,42 @@ function FusedCourseContent({
                     return (
                       <div 
                         key={index} 
-                        className="group block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 p-6 border border-gray-200 hover:border-gray-300 cursor-pointer"
+                        className="group block bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 py-3 px-4 border border-gray-200 hover:border-gray-300 cursor-pointer"
                         onClick={() => handleContentItemClick(item)}
                       >
                          <div className="flex items-center justify-between">
                            <div className="flex items-center">
-                             <div className={`p-3 rounded-lg mr-4 ${
-                               isLesson ? 'bg-blue-500' : 
-                               isTutorial ? 'bg-green-500' : 
-                               isQuiz ? 'bg-yellow-500' : 
+                             <div className={`p-2 rounded-lg mr-3 ${
+                               isLesson ? 'bg-blue-500' :
+                               isTutorial ? 'bg-green-500' :
+                               isQuiz ? 'bg-yellow-500' :
                                isChallenge ? 'bg-red-500' : 'bg-gray-500'
                              }`}>
                                {isLesson ? (
-                                 <FileText className="h-6 w-6 text-white" />
+                                 <FileText className="h-5 w-5 text-white" />
                                ) : isTutorial ? (
-                                 <PlayCircle className="h-6 w-6 text-white" />
+                                 <PlayCircle className="h-5 w-5 text-white" />
                                ) : isQuiz ? (
-                                 <Circle className="h-6 w-6 text-white" />
+                                 <Circle className="h-5 w-5 text-white" />
                                ) : isChallenge ? (
-                                 <Swords className="h-6 w-6 text-white" />
+                                 <Swords className="h-5 w-5 text-white" />
                                ) : (
-                                 <BookOpen className="h-6 w-6 text-white" />
+                                 <BookOpen className="h-5 w-5 text-white" />
                                )}
                              </div>
-                            <div>
-                              <h3 className="text-xl font-semibold text-gray-900 group-hover:text-blue-600">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 truncate">
                                 {item.title}
                               </h3>
-                              <p className="text-gray-500">
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium whitespace-nowrap ${
+                                isLesson ? 'bg-blue-100 text-blue-800' :
+                                isTutorial ? 'bg-green-100 text-green-800' :
+                                isQuiz ? 'bg-yellow-100 text-yellow-800' :
+                                isChallenge ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
                                 {isLesson ? 'Chapter' : isTutorial ? 'Tutorial' : isQuiz ? 'Quiz' : isChallenge ? 'Challenge' : 'Content'}
-                              </p>
+                              </span>
                             </div>
                           </div>
                            <div className="flex items-center space-x-4">

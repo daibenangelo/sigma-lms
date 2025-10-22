@@ -3,24 +3,66 @@ import { getEntriesByContentType } from "@/lib/contentful";
 import { CourseFields } from "@/lib/contentful-types";
 import { unstable_cache } from 'next/cache';
 
-// Cached function to get course content counts
+// Cached function to get course content counts directly from Contentful
 const getCachedCourseContent = (courseSlug: string) => unstable_cache(
   async () => {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-      const response = await fetch(`${baseUrl}/api/lessons?course=${courseSlug}`, {
-        cache: 'no-store'
-      });
-      
-      if (!response.ok) {
+      // First, find the course by slug
+      const courses = await getEntriesByContentType<{ title?: string; slug?: string; chapters?: any[] }>(
+        "course",
+        { limit: 1, "fields.slug": courseSlug, include: 10 }
+      );
+
+      if (courses.length === 0) {
         return { quizCount: 0, tutorialCount: 0, challengeCount: 0 };
       }
-      
-      const data = await response.json();
+
+      const course = courses[0];
+      const courseChapters = course.fields?.chapters || [];
+
+      if (courseChapters.length === 0) {
+        return { quizCount: 0, tutorialCount: 0, challengeCount: 0 };
+      }
+
+      // Extract chapter IDs from the course
+      const chapterIds = courseChapters.map((chapter: any) => chapter.sys?.id).filter(Boolean);
+
+      if (chapterIds.length === 0) {
+        return { quizCount: 0, tutorialCount: 0, challengeCount: 0 };
+      }
+
+      // Fetch all lessons and filter by the chapter IDs from the course
+      const allLessons = await getEntriesByContentType<{ title?: string; slug?: string; content?: any }>(
+        "lesson",
+        { limit: 1000, include: 10 }
+      );
+
+      // Filter lessons to only include those that are linked to this course
+      const courseLessons = allLessons.filter((lesson: any) => {
+        const lessonId = lesson.sys?.id;
+        return chapterIds.includes(lessonId);
+      });
+
+      // Count different content types
+      let quizCount = 0;
+      let tutorialCount = 0;
+      let challengeCount = 0;
+
+      // Process each lesson to count linked content
+      courseLessons.forEach((lesson: any) => {
+        const lessonQuizLinks = Array.isArray(lesson?.fields?.lessonQuiz) ? lesson.fields.lessonQuiz : [];
+        const tutorialLinks = Array.isArray(lesson?.fields?.tutorial) ? lesson.fields.tutorial : [];
+        const challengeLinks = Array.isArray(lesson?.fields?.challenge) ? lesson.fields.challenge : [];
+
+        quizCount += lessonQuizLinks.length;
+        tutorialCount += tutorialLinks.length;
+        challengeCount += challengeLinks.length;
+      });
+
       return {
-        quizCount: data.quizzes?.length || 0,
-        tutorialCount: data.tutorials?.length || 0,
-        challengeCount: data.challenges?.length || 0
+        quizCount,
+        tutorialCount,
+        challengeCount
       };
     } catch (error) {
       console.warn(`Failed to fetch content counts for course ${courseSlug}:`, error);
