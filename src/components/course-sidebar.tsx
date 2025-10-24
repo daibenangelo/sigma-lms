@@ -26,14 +26,18 @@ import { useAuth } from "@/contexts/auth-context";
 type ContentItem = {
   title: string;
   slug: string;
-  type: 'lesson' | 'quiz' | 'module-quiz' | 'tutorial' | 'challenge' | 'chapter';
+  type: 'lesson' | 'quiz' | 'module-quiz' | 'module-project' | 'module-review' | 'tutorial' | 'challenge' | 'chapter';
+  moduleSlug?: string;
+  courseSlug?: string;
 };
 
 export function CourseSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
   const [content, setContent] = useState<ContentItem[]>([]);
+  const [modules, setModules] = useState<any[]>([]);
   const [courseName, setCourseName] = useState<string>("Course");
+  const [moduleName, setModuleName] = useState<string>("Module");
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [sidebarWidth, setSidebarWidth] = useState<number>(320);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
@@ -49,18 +53,28 @@ export function CourseSidebar() {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('course') || '';
   };
-  
+
+  // Get current module from URL (for module pages)
+  const getCurrentModule = () => {
+    if (typeof window === 'undefined') return '';
+    const urlParams = new URLSearchParams(window.location.search);
+    const moduleFromParams = urlParams.get('module');
+    console.log('[sidebar] Module from URL params:', moduleFromParams);
+    return moduleFromParams || '';
+  };
+
   const currentCourse = getCurrentCourse();
+  const currentModule = getCurrentModule();
   console.log("[sidebar] Current course:", currentCourse);
   
-  const { 
-    progress, 
-    markItemCompleted, 
+  const {
+    progress,
+    markItemCompleted,
     markItemViewed,
-    isItemCompleted, 
+    isItemCompleted,
     isItemViewed,
-    saveProgress 
-  } = useCourseProgress(currentCourse);
+    saveProgress
+  } = useCourseProgress(currentCourse || currentModule);
 
   // Calculate progress - prioritize database progress, use sessionStorage as fallback
   const dbCompletedCount = progress?.completed_items?.length || 0;
@@ -165,8 +179,8 @@ export function CourseSidebar() {
 
   // Track current page as viewed (only mark as viewed when visiting, not completed)
   useEffect(() => {
-    const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
-    if (currentSlug && totalCount > 0 && currentCourse && user) {
+    const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
+    if (currentSlug && totalCount > 0 && (currentCourse || currentModule) && user) {
       // Check if already viewed in database
       const isAlreadyViewed = isItemViewed(currentSlug);
       
@@ -191,51 +205,143 @@ export function CourseSidebar() {
   }, [pathname, currentCourse, totalCount, isItemViewed, markItemViewed]);
 
 
+  // Fetch modules
+  useEffect(() => {
+    fetch('/api/modules')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        const modulesArray = Array.isArray(data) ? data : [];
+        console.log('[sidebar] Modules data:', modulesArray);
+        setModules(modulesArray);
+      })
+      .catch(error => {
+        console.error('[sidebar] Error fetching modules:', error);
+        setModules([]);
+      });
+  }, []);
+
   // Fetch content when pathname changes
   useEffect(() => {
     const course = getCurrentCourse();
-    if (!course) {
+    const moduleFromParams = getCurrentModule();
+    const isModulePage = pathname?.startsWith('/module-') || pathname?.startsWith('/module-quiz') || pathname?.startsWith('/module-review') || pathname?.startsWith('/module-project');
+
+    // For module quiz pages, the slug IS the module slug
+    const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
+    const module = pathname?.startsWith('/module-quiz') ? currentSlug : moduleFromParams;
+
+    console.log('[sidebar] Module page detection:', {
+      pathname,
+      isModulePage,
+      currentSlug,
+      moduleFromParams,
+      module,
+      modulesCount: modules.length
+    });
+
+    if (isModulePage && module) {
+      // For module pages, show module structure
+      const currentModuleData = modules.find(m => m.slug === module);
+      console.log('[sidebar] Current module data:', currentModuleData);
+
+      if (currentModuleData) {
+        setModuleName(currentModuleData.title);
+
+        // Create content items for module-level items
+        const moduleContent: ContentItem[] = [];
+
+        // Add module review if exists
+        if (currentModuleData.moduleReview?.fields?.slug) {
+          moduleContent.push({
+            title: currentModuleData.moduleReview.fields.title || 'Module Review',
+            slug: currentModuleData.moduleReview.fields.slug,
+            type: 'module-review',
+            moduleSlug: module
+          });
+        }
+
+        // Add module quiz if exists
+        if (currentModuleData.moduleQuiz?.length > 0) {
+          moduleContent.push({
+            title: 'Module Quiz',
+            slug: module,
+            type: 'module-quiz',
+            moduleSlug: module
+          });
+        }
+
+        // Add module project if exists
+        if (currentModuleData.moduleProject?.length > 0) {
+          currentModuleData.moduleProject.forEach((project: any, idx: number) => {
+            moduleContent.push({
+              title: project.fields?.title || `Module Project ${idx + 1}`,
+              slug: project.fields?.slug || `${module}-project-${idx}`,
+              type: 'module-project',
+              moduleSlug: module
+            });
+          });
+        } else {
+          // Add placeholder module project if none exist
+          moduleContent.push({
+            title: 'Module Project (Coming Soon)',
+            slug: `${module}-project-placeholder`,
+            type: 'module-project',
+            moduleSlug: module
+          });
+        }
+
+        setContent(moduleContent);
+        setCourseName(`${currentModuleData.title} Module`);
+      }
+    } else if (course) {
+      // For course pages, show course content
+      fetchLessons(course)
+        .then((data) => {
+          console.log("[sidebar] /api/lessons response:", data);
+          if (!data) {
+            setContent([]);
+            return;
+          }
+          // Keep nested order: chapter followed by its items
+          const combined = Array.isArray(data.allContent) ? data.allContent : [];
+          console.log("[sidebar] combined content:", combined);
+          console.log("[sidebar] Content breakdown:", {
+            lessons: (data as any).lessons?.length || 0,
+            tutorials: (data as any).tutorials?.length || 0,
+            quizzes: (data as any).quizzes?.length || 0,
+            challenges: (data as any).challenges?.length || 0,
+            allContent: combined.length
+          });
+          setContent(combined);
+
+          // Extract course name from the course data or use a default
+          if (data.courseName) {
+            setCourseName(data.courseName);
+          } else if (data.allContent && data.allContent.length > 0) {
+            // Fallback: use course parameter with proper formatting
+            setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
+          } else {
+            setCourseName("Course");
+          }
+          setModuleName("Module");
+        })
+        .catch((e) => {
+          console.error("[sidebar] /api/lessons fetch failed:", e);
+          setContent([]);
+        });
+    } else {
       setContent([]);
       setCourseName("Course");
-      return;
+      setModuleName("Module");
     }
+  }, [pathname, modules]);
 
-    fetchLessons(course)
-      .then((data) => {
-        console.log("[sidebar] /api/lessons response:", data);
-        if (!data) {
-          setContent([]);
-          return;
-        }
-        // Keep nested order: chapter followed by its items
-        const combined = Array.isArray(data.allContent) ? data.allContent : [];
-        console.log("[sidebar] combined content:", combined);
-        console.log("[sidebar] Content breakdown:", {
-          lessons: (data as any).lessons?.length || 0,
-          tutorials: (data as any).tutorials?.length || 0,
-          quizzes: (data as any).quizzes?.length || 0,
-          challenges: (data as any).challenges?.length || 0,
-          allContent: combined.length
-        });
-        setContent(combined);
-        
-        // Extract course name from the course data or use a default
-        if (data.courseName) {
-          setCourseName(data.courseName);
-        } else if (data.allContent && data.allContent.length > 0) {
-          // Fallback: use course parameter with proper formatting
-          setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
-        } else {
-          setCourseName("Course");
-        }
-      })
-      .catch((e) => {
-        console.error("[sidebar] /api/lessons fetch failed:", e);
-        setContent([]);
-      });
-  }, [pathname]);
-
-  const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
+  const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -246,6 +352,12 @@ export function CourseSidebar() {
       case 'quiz':
         return <Circle className="h-4 w-4" />;
       case 'challenge':
+        return <Swords className="h-4 w-4" />;
+      case 'module-quiz':
+        return <Circle className="h-4 w-4" />;
+      case 'module-review':
+        return <BookOpen className="h-4 w-4" />;
+      case 'module-project':
         return <Swords className="h-4 w-4" />;
       default:
         return <Wrench className="h-4 w-4" />;
@@ -314,7 +426,12 @@ export function CourseSidebar() {
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900 truncate">{courseName}</h2>
+          <div>
+            <h2 className="font-semibold text-gray-900 truncate">{courseName}</h2>
+            {moduleName !== "Module" && (
+              <p className="text-sm text-gray-600 truncate">{moduleName}</p>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -357,10 +474,16 @@ export function CourseSidebar() {
               const isQuiz = item.type === 'quiz';
               const isChallenge = item.type === 'challenge';
               const isModuleQuiz = item.type === 'module-quiz';
-              
-              const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` : 
-                          isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` : 
-                          isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` : 
+              const isModuleReview = item.type === 'module-review';
+              const isModuleProject = item.type === 'module-project';
+
+              const href = isQuiz ? `/quiz/${item.slug}?course=${currentCourse}` :
+                          isTutorial ? `/tutorial/${item.slug}?course=${currentCourse}` :
+                          isChallenge ? `/challenge/${item.slug}?course=${currentCourse}` :
+                          isLesson ? `/lesson/${item.slug}?course=${currentCourse}` :
+                          isModuleQuiz ? `/module-quiz/${item.slug}` :
+                          isModuleReview ? `/module-review/${item.slug}${currentModule ? `?module=${currentModule}` : ''}` :
+                          isModuleProject ? (item.slug.includes('placeholder') ? '#' : `/module-project/${item.slug}${currentModule ? `?module=${currentModule}` : ''}`) :
                           `/lesson/${item.slug}?course=${currentCourse}`;
 
               const isActive = currentSlug === item.slug;
@@ -382,10 +505,13 @@ export function CourseSidebar() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.title}</p>
                       <p className="text-xs text-gray-500">
-                        {isLesson ? 'Chapter' : 
-                         isTutorial ? 'Tutorial' : 
-                         isQuiz ? 'Quiz' : 
-                         isChallenge ? 'Challenge' : 
+                        {isLesson ? 'Chapter' :
+                         isTutorial ? 'Tutorial' :
+                         isQuiz ? 'Quiz' :
+                         isChallenge ? 'Challenge' :
+                         isModuleQuiz ? 'Module Quiz' :
+                         isModuleReview ? 'Module Review' :
+                         isModuleProject ? 'Module Project' :
                          'Content'}
                       </p>
                     </div>

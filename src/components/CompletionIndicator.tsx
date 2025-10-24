@@ -6,12 +6,13 @@ import { useAuth } from "@/contexts/auth-context";
 import { validateQuizAttempt } from "@/lib/localStorage-validator";
 
 type Props = {
-  type: "challenge" | "quiz";
+  type: "challenge" | "quiz" | "moduleQuiz" | "moduleProject" | "moduleReview";
   slug: string;
   course?: string | null;
+  module?: string | null;
 };
 
-export default function CompletionIndicator({ type, slug, course }: Props) {
+export default function CompletionIndicator({ type, slug, course, module }: Props) {
   const [completed, setCompleted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const { user } = useAuth();
@@ -35,17 +36,56 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
         return;
       }
 
-      // quiz
-      if (!course || !user) {
-        setCompleted(false);
+      // For moduleProject and moduleReview, just check if viewed (since they're content pages)
+      if (type === 'moduleProject' || type === 'moduleReview') {
+        if (!module || !user) {
+          setCompleted(false);
+          setLoading(false);
+          return;
+        }
+
+        // Check if item is in viewed items for this module
+        const viewedStorageKey = `viewedItems_${user.id}_${module}`;
+        const storedViewed = typeof window !== "undefined" ? sessionStorage.getItem(viewedStorageKey) : null;
+
+        if (storedViewed) {
+          try {
+            const viewedItems = JSON.parse(storedViewed);
+            const isViewed = Array.isArray(viewedItems) ? viewedItems.includes(slug) : false;
+            setCompleted(isViewed);
+            console.log(`[CompletionIndicator] ${type} viewed check:`, { slug, module, isViewed });
+          } catch (e) {
+            console.warn(`[CompletionIndicator] Failed to parse viewed items for module ${module}:`, e);
+            setCompleted(false);
+          }
+        } else {
+          setCompleted(false);
+        }
         setLoading(false);
         return;
       }
 
-      // Check localStorage for perfect score first
-      if (typeof window !== 'undefined') {
-        const keys = Object.keys(localStorage);
-        const attemptKeys = keys.filter(key => key.startsWith(`quiz-${slug}-`));
+      // quiz or moduleQuiz
+      if (type === 'quiz' || type === 'moduleQuiz') {
+        if (!user) {
+          setCompleted(false);
+          setLoading(false);
+          return;
+        }
+
+        // For moduleQuiz, we don't need course parameter
+        if (type === 'moduleQuiz' && !course) {
+          // Module quiz uses module slug as course for progress tracking
+          // We'll use the slug directly as the course identifier
+        }
+
+        // Check localStorage for perfect score first
+        if (typeof window !== 'undefined') {
+          const keys = Object.keys(localStorage);
+          const attemptKeys = keys.filter(key =>
+            key.startsWith(`quiz-${slug}-`) ||
+            key.startsWith(`module-quiz-${slug}-`)
+          );
 
         console.log('[CompletionIndicator] Checking quiz completion:', {
           slug,
@@ -91,7 +131,10 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
         }
       } else {
         // Fallback to API if localStorage is not available
-        const res = await fetch(`/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`);
+        const apiUrl = type === 'moduleQuiz'
+          ? `/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}`
+          : `/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`;
+        const res = await fetch(apiUrl);
         if (!res.ok) {
           setCompleted(false);
           setLoading(false);
@@ -103,6 +146,7 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
           : !!data.hasPerfectScore;
         setCompleted(hasPerfect);
       }
+      }
     } catch (error) {
       console.error('[CompletionIndicator] Error checking completion status:', error);
       setCompleted(false);
@@ -113,7 +157,7 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
 
   useEffect(() => {
     checkStatus();
-  }, [type, slug, course, user]);
+  }, [type, slug, course, module, user]);
 
   // Listen for completion events to refresh status
   useEffect(() => {
@@ -167,6 +211,16 @@ export default function CompletionIndicator({ type, slug, course }: Props) {
           ? completed
             ? "Challenge completed"
             : "Challenge not completed"
+          : type === "moduleProject"
+          ? completed
+            ? "Module project viewed"
+            : slug.includes('placeholder')
+            ? "Module project not available yet"
+            : "Module project not viewed"
+          : type === "moduleReview"
+          ? completed
+            ? "Module review viewed"
+            : "Module review not viewed"
           : completed
             ? "Quiz completed (perfect score)"
             : "Quiz not completed (perfect score required)"}

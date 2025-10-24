@@ -13,15 +13,17 @@ export function Shell({ children }: ShellProps) {
   const pathname = usePathname();
 
   // Pages that should not show navbar and sidebar
-  const standalonePages = [
-    "/profile"
-  ];
+  const standalonePages = [];
 
   // Pages that should show navbar but not sidebar
   const navbarOnlyPages = [
     "/programs",
-    "/csdp/courses"
+    "/csdp/courses",
+    "/profile"
   ];
+
+  // Check if current path is a module page
+  const isModulePage = pathname?.startsWith('/module-') || pathname?.startsWith('/module-quiz') || pathname?.startsWith('/module-review') || pathname?.startsWith('/module-project');
 
   // Auth pages that should not show navbar and sidebar
   const authPages = [
@@ -33,9 +35,9 @@ export function Shell({ children }: ShellProps) {
 
   // Check if current path is a course page (e.g., /course/html, /course/css)
   const isCoursePage = pathname?.startsWith("/course/");
-  
-  // Check if current path is a lesson, tutorial, quiz, or challenge page
-  const isContentPage = pathname?.match(/^\/(lesson|tutorial|quiz|challenge)\//);
+
+  // Check if current path is a lesson, tutorial, quiz, challenge, or module page
+  const isContentPage = pathname?.match(/^\/(lesson|tutorial|quiz|challenge|module-(quiz|review|project)|module-quiz|module-review|module-project)\//);
 
   const isStandalonePage = standalonePages.some(page => pathname?.startsWith(page));
   const isNavbarOnlyPage = navbarOnlyPages.some(page => pathname?.startsWith(page));

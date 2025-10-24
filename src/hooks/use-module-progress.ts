@@ -4,54 +4,47 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/auth-context';
 
-export interface CourseProgress {
+export interface ModuleProgress {
   id: string;
   user_id: string;
-  course_slug: string;
+  module_slug: string;
   completed_items: string[];
   viewed_items: string[];
   progress_percentage: number;
   last_updated: string;
 }
 
-export function useCourseProgress(courseSlug?: string) {
-  const [progress, setProgress] = useState<CourseProgress | null>(null);
+export function useModuleProgress(moduleSlug?: string) {
+  const [progress, setProgress] = useState<ModuleProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
   // Fetch progress from database
   const fetchProgress = useCallback(async () => {
-    if (!user || !courseSlug) {
+    if (!user || !moduleSlug) {
       setLoading(false);
       return;
     }
 
     try {
-      // Try user_course_progress first, then fallback to user_progress
-      let data = null;
-      let error = null;
-
-      // Try user_course_progress table
-      const { data: courseProgressData, error: courseProgressError } = await supabase
-        .from('user_course_progress')
+      // Try user_module_progress table
+      const { data, error } = await supabase
+        .from('user_module_progress')
         .select('*')
         .eq('user_id', user.id)
-        .eq('course_slug', courseSlug)
+        .eq('module_slug', moduleSlug)
         .maybeSingle();
 
-      if (courseProgressError && courseProgressError.code === 'PGRST205') {
+      if (error && error.code === 'PGRST205') {
         // Table doesn't exist, return null (no progress tracking available)
-        console.warn('[useCourseProgress] user_course_progress table not found, progress tracking unavailable');
+        console.warn('[useModuleProgress] user_module_progress table not found, progress tracking unavailable');
         setProgress(null);
         return;
-      } else {
-        data = courseProgressData;
-        error = courseProgressError;
       }
 
       if (error && error.code !== 'PGRST116') {
-        console.warn('[useCourseProgress] Progress fetch skipped (table missing or unavailable):', error);
+        console.warn('[useModuleProgress] Progress fetch skipped (table missing or unavailable):', error);
         setProgress(null);
         return;
       }
@@ -59,115 +52,87 @@ export function useCourseProgress(courseSlug?: string) {
       // Ensure viewed_items exists (fallback for older schema)
       const progressData = data ? {
         ...data,
-        viewed_items: data.viewed_items || []
+        viewed_items: data.viewed_items || [],
+        completed_items: data.completed_items || []
       } : null;
 
       setProgress(progressData);
     } catch (err) {
-      console.warn('[useCourseProgress] Error fetching progress:', err);
+      console.warn('[useModuleProgress] Error fetching progress:', err);
       setProgress(null);
     } finally {
       setLoading(false);
     }
-  }, [user, courseSlug]);
+  }, [user, moduleSlug]);
 
   // Save progress to database
   const saveProgress = useCallback(async (completedItems: string[], totalItems: number, viewedItems?: string[]) => {
-    if (!user || !courseSlug) return;
+    if (!user || !moduleSlug) return;
 
     try {
-      // Calculate progress percentage using the same logic as CSDP courses
-      // Content pages (lessons/chapters) count as completed when viewed
-      const currentCompletedItems = completedItems || [];
-      const currentViewedItems = viewedItems || progress?.viewed_items || [];
-
-      // Get lesson/chapter items to count viewed ones as completed
-      let lessonChapterItems: string[] = [];
-      try {
-        const lessonsRes = await fetch(`/api/lessons?course=${courseSlug}`);
-        if (lessonsRes.ok) {
-          const lessonsData = await lessonsRes.json();
-          lessonChapterItems = lessonsData.allContent
-            ?.filter((item: any) => item.type === 'lesson' || item.type === 'chapter')
-            ?.map((item: any) => item.slug) || [];
-        }
-      } catch (error) {
-        console.warn('Failed to fetch lessons for progress calculation:', error);
-      }
-
-      // Calculate effective completed items (includes viewed lessons/chapters)
-      const viewedLessonItems = currentViewedItems.filter(item =>
-        lessonChapterItems.includes(item) && !currentCompletedItems.includes(item)
-      );
-
-      const effectiveCompletedCount = currentCompletedItems.length + viewedLessonItems.length;
-
+      // Calculate progress percentage
+      const effectiveCompletedCount = completedItems.length;
       const progressPercentage = totalItems > 0 ? Math.round((effectiveCompletedCount / totalItems) * 100) : 0;
 
       // Prepare upsert data
       const upsertData: any = {
         user_id: user.id,
-        course_slug: courseSlug,
+        module_slug: moduleSlug,
         completed_items: completedItems,
-        viewed_items: currentViewedItems,
+        viewed_items: viewedItems || progress?.viewed_items || [],
         progress_percentage: progressPercentage,
         last_updated: new Date().toISOString()
       };
 
-      // Try user_course_progress first, then fallback to user_progress
-      let error = null;
-
-      // Try user_course_progress table
-      const { error: courseProgressError } = await supabase
-        .from('user_course_progress')
+      // Try user_module_progress table
+      const { error } = await supabase
+        .from('user_module_progress')
         .upsert(upsertData, {
-          onConflict: 'user_id,course_slug'
+          onConflict: 'user_id,module_slug'
         });
 
-      if (courseProgressError && courseProgressError.code === 'PGRST205') {
-        // Table doesn't exist, log warning and skip save (progress tracking unavailable)
-        console.warn('[useCourseProgress] user_course_progress table not found, progress save skipped');
+      if (error && error.code === 'PGRST205') {
+        // Table doesn't exist, log warning and skip save
+        console.warn('[useModuleProgress] user_module_progress table not found, progress save skipped');
         return false;
-      } else {
-        error = courseProgressError;
       }
 
       if (error) {
-        console.warn('[useCourseProgress] Progress save failed:', error);
+        console.warn('[useModuleProgress] Progress save failed:', error);
         return false;
       }
 
       setProgress(prev => ({
         id: prev?.id || '',
         user_id: user.id,
-        course_slug: courseSlug,
+        module_slug: moduleSlug,
         completed_items: completedItems,
-        viewed_items: currentViewedItems,
+        viewed_items: viewedItems || prev?.viewed_items || [],
         progress_percentage: progressPercentage,
         last_updated: new Date().toISOString()
       }));
 
       return true;
     } catch (err) {
-      console.warn('[useCourseProgress] Error saving progress:', err);
+      console.warn('[useModuleProgress] Error saving progress:', err);
       return false;
     }
-  }, [user, courseSlug, progress]);
+  }, [user, moduleSlug, progress]);
 
   // Mark item as completed
   const markItemCompleted = useCallback(async (itemSlug: string, totalItems: number) => {
-    if (!user || !courseSlug) return;
+    if (!user || !moduleSlug) return;
 
     const currentCompleted = progress?.completed_items || [];
     if (currentCompleted.includes(itemSlug)) return; // Already completed
 
     const newCompleted = [...currentCompleted, itemSlug];
     return await saveProgress(newCompleted, totalItems);
-  }, [user, courseSlug, progress, saveProgress]);
+  }, [user, moduleSlug, progress, saveProgress]);
 
   // Mark item as viewed
   const markItemViewed = useCallback(async (itemSlug: string, totalItems: number) => {
-    if (!user || !courseSlug) return;
+    if (!user || !moduleSlug) return;
 
     const currentViewed = progress?.viewed_items || [];
     if (currentViewed.includes(itemSlug)) return; // Already viewed
@@ -175,7 +140,7 @@ export function useCourseProgress(courseSlug?: string) {
     const newViewed = [...currentViewed, itemSlug];
     const currentCompleted = progress?.completed_items || [];
     return await saveProgress(currentCompleted, totalItems, newViewed);
-  }, [user, courseSlug, progress, saveProgress]);
+  }, [user, moduleSlug, progress, saveProgress]);
 
   // Get completion status
   const isItemCompleted = useCallback((itemSlug: string) => {
@@ -190,7 +155,7 @@ export function useCourseProgress(courseSlug?: string) {
   // Get progress stats
   const getProgressStats = useCallback(() => {
     if (!progress) return { completed: 0, total: 0, percentage: 0 };
-    
+
     return {
       completed: progress.completed_items.length,
       total: progress.completed_items.length, // This will be updated when we have total items

@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { getEntriesByContentType } from "@/lib/contentful";
-import { RichText } from "@/components/rich-text";
-import LessonContent from "./lesson-content";
+import ModuleReviewContent from "./module-review-content";
 
 type Params = {
   params: Promise<{ slug: string }>;
@@ -12,25 +11,25 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
 
   try {
-    const items = await getEntriesByContentType<{
-      title?: string;
+    const reviews = await getEntriesByContentType<{
+      topic?: string;
       slug?: string;
       content?: any;
-    }>("lesson", { limit: 1, "fields.slug": slug, include: 10 });
+    }>("moduleReview", { limit: 1, "fields.slug": slug, include: 10 });
 
-    const lesson = items[0];
-    if (!lesson) {
+    const review = reviews[0];
+    if (!review) {
       return {
-        title: "Lesson Not Found | Sigma LMS",
-        description: "The requested lesson could not be found.",
+        title: "Module Review Not Found | Sigma LMS",
+        description: "The requested module review could not be found.",
       };
     }
 
-    const title = (lesson.fields as any).title || "Lesson";
-    const content = (lesson.fields as any).content;
+    const topic = (review.fields as any).topic || "Module Review";
+    const content = (review.fields as any).content;
 
     // Extract description from content (first paragraph or preview text)
-    let description = "Learn software development concepts and programming fundamentals.";
+    let description = "Module review and summary content.";
     if (content && content.content && content.content.length > 0) {
       const firstParagraph = content.content.find((node: any) => node.nodeType === 'paragraph');
       if (firstParagraph && firstParagraph.content) {
@@ -47,43 +46,41 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     }
 
     return {
-      title: `${title} | Sigma LMS`,
+      title: `${topic} | Sigma LMS`,
       description,
-      keywords: ["lesson", "programming", "software development", "learning", title.toLowerCase()],
+      keywords: ["module review", "programming", "software development", "learning", topic.toLowerCase()],
       openGraph: {
-        title: `${title} | Sigma LMS`,
+        title: `${topic} | Sigma LMS`,
         description,
         type: "article",
       },
       twitter: {
         card: "summary",
-        title: `${title} | Sigma LMS`,
+        title: `${topic} | Sigma LMS`,
         description,
       },
     };
   } catch (error) {
-    console.error("Error generating metadata for lesson:", error);
+    console.error("Error generating metadata for module review:", error);
     return {
-      title: "Lesson | Sigma LMS",
-      description: "Interactive programming lessons and tutorials.",
+      title: "Module Review | Sigma LMS",
+      description: "Interactive programming module reviews and summaries.",
     };
   }
 }
 
-export default async function LessonPage({ params }: Params) {
+export default async function ModuleReviewPage({ params }: Params) {
   const { slug } = await params;
-  const items = await getEntriesByContentType<{
-    title?: string;
+  const reviews = await getEntriesByContentType<{
+    topic?: string;
     slug?: string;
     content?: any;
-  }>("lesson", { limit: 1, "fields.slug": slug, include: 10 });
+  }>("moduleReview", { limit: 1, "fields.slug": slug, include: 10 });
 
-  const lesson = items[0];
-  if (!lesson) {
+  const review = reviews[0];
+  if (!review) {
     notFound();
   }
 
-  return <LessonContent lesson={lesson} slug={slug} />;
+  return <ModuleReviewContent review={review} slug={slug} />;
 }
-
-

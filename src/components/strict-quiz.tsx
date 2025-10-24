@@ -20,11 +20,12 @@ interface StrictQuizProps {
   questions: QuizQuestion[];
   title?: string;
   quizSlug?: string;
+  quizType?: 'regular' | 'module';
 }
 
 type QuizState = 'not-started' | 'in-progress' | 'submitted';
 
-export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizProps) {
+export function StrictQuiz({ questions, title = "Quiz", quizSlug, quizType = 'regular' }: StrictQuizProps) {
   const [quizState, setQuizState] = useState<QuizState>('not-started');
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<(number | number[])[]>(new Array(questions.length).fill(-1));
@@ -59,7 +60,12 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
 
         // Check localStorage for perfect score and latest attempt
         const keys = Object.keys(localStorage);
-        const attemptKeys = keys.filter(key => key.startsWith(`quiz-${quizSlug}-`));
+        const attemptKeys = keys.filter(key => {
+          if (quizType === 'module') {
+            return key.startsWith(`quiz-${quizSlug}-`) || key.startsWith(`module-quiz-${quizSlug}-`);
+          }
+          return key.startsWith(`quiz-${quizSlug}-`);
+        });
 
         let localPerfect = false;
         let localLatestAttempt = null;
@@ -194,7 +200,10 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
 
   const handleNext = () => {
     if (!isLastQuestion) {
+      console.log(`[Quiz] Moving from question ${currentQuestion} to ${currentQuestion + 1}`);
       setCurrentQuestion(prev => prev + 1);
+    } else {
+      console.log(`[Quiz] Cannot move next - already on last question (${currentQuestion})`);
     }
   };
 
@@ -289,6 +298,7 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
         body: JSON.stringify({
           quizSlug,
           quizTitle: title,
+          quizType: quizType || 'regular',
           answers: answersData,
           score,
           totalQuestions: questions.length,
@@ -329,8 +339,8 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
         // Save to localStorage for UI display and counting
         try {
           const timestamp = Date.now();
-          const attemptKey = `quiz-${quizSlug}-${timestamp}`;
-          const latestKey = `quiz-last-${quizSlug}`;
+          const attemptKey = quizType === 'module' ? `module-quiz-${quizSlug}-${timestamp}` : `quiz-${quizSlug}-${timestamp}`;
+          const latestKey = quizType === 'module' ? `module-quiz-last-${quizSlug}` : `quiz-last-${quizSlug}`;
 
           console.log('[StrictQuiz] Saving quiz attempt to localStorage:', {
             quizSlug,
@@ -575,26 +585,73 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
                 Previous
               </Button>
 
-              <div className="flex space-x-2">
-                {questions.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setCurrentQuestion(index)}
-                    className={`w-8 h-8 rounded-full text-sm font-medium ${
-                      index === currentQuestion
-                        ? 'bg-blue-600 text-white'
-                        : (() => {
-                            const answer = selectedAnswers[index];
-                            if (Array.isArray(answer)) {
-                              return answer.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
-                            }
-                            return answer !== -1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600';
-                          })()
-                    }`}
-                  >
-                    {index + 1}
-                  </button>
-                ))}
+              {/* Smart pagination */}
+              <div className="flex items-center justify-center space-x-1">
+                {/* First page */}
+                {currentQuestion > 3 && (
+                  <>
+                    <button
+                      onClick={() => setCurrentQuestion(0)}
+                      className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                        (() => {
+                          const answer = selectedAnswers[0];
+                          return Array.isArray(answer) ? answer.length > 0 : answer !== -1;
+                        })()
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      1
+                    </button>
+                    {currentQuestion > 4 && <span className="text-gray-400 px-1">...</span>}
+                  </>
+                )}
+
+                {/* Pages around current question */}
+                {Array.from({ length: Math.min(7, questions.length) }, (_, i) => {
+                  const pageNum = Math.max(0, Math.min(questions.length - 7, currentQuestion - 3)) + i;
+                  if (pageNum >= questions.length) return null;
+
+                  const answer = selectedAnswers[pageNum];
+                  const isCurrent = pageNum === currentQuestion;
+                  const hasAnswer = Array.isArray(answer) ? answer.length > 0 : answer !== -1;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentQuestion(pageNum)}
+                      className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                        isCurrent
+                          ? 'bg-blue-600 text-white'
+                          : hasAnswer
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {pageNum + 1}
+                    </button>
+                  );
+                })}
+
+                {/* Last page */}
+                {currentQuestion < questions.length - 4 && (
+                  <>
+                    {currentQuestion < questions.length - 5 && <span className="text-gray-400 px-1">...</span>}
+                    <button
+                      onClick={() => setCurrentQuestion(questions.length - 1)}
+                      className={`w-8 h-8 rounded-full text-sm font-medium transition-colors ${
+                        (() => {
+                          const answer = selectedAnswers[questions.length - 1];
+                          return Array.isArray(answer) ? answer.length > 0 : answer !== -1;
+                        })()
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {questions.length}
+                    </button>
+                  </>
+                )}
               </div>
 
               {isLastQuestion ? (
@@ -609,13 +666,6 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug }: StrictQuizPr
               ) : (
                 <Button
                   onClick={handleNext}
-                  disabled={(() => {
-                    const currentAnswer = selectedAnswers[currentQuestion];
-                    if (Array.isArray(currentAnswer)) {
-                      return currentAnswer.length === 0;
-                    }
-                    return currentAnswer === -1;
-                  })()}
                 >
                   Next
                 </Button>

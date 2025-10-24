@@ -4,6 +4,7 @@ import { RichText } from "@/components/rich-text";
 import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 import { getEntriesByContentType } from "@/lib/contentful";
 import CompletionIndicator from "@/components/CompletionIndicator";
+import ChallengeContent from "./challenge-content";
 
 type Params = {
   params: Promise<{ slug: string }>;
@@ -157,56 +158,5 @@ export default async function ChallengePage({ params, searchParams }: { params: 
 
   const testJS = fields.testJS;
 
-  return (
-    <div className="max-w-4xl mx-auto pb-[30vh]">
-      <h1 className="text-3xl font-bold mb-2">{fields.title}</h1>
-      <p className="text-gray-600 mb-2">Software Development Programme · Challenge</p>
-      <CompletionIndicator type="challenge" slug={slug} />
-      
-      {/* Preview Section */}
-      {fields.preview && (
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">Preview</h2>
-          <div className="p-6 rounded-lg border border-blue-200 bg-blue-50">
-            <RichText document={fields.preview} />
-          </div>
-        </section>
-      )}
-
-      {/* Content Section */}
-      {fields.content && (
-        <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900">Instructions</h2>
-          <div className="p-6 rounded-lg border border-gray-200 bg-white">
-            <RichText document={fields.content} />
-          </div>
-        </section>
-      )}
-
-
-      {/* Code Editor Section */}
-      <section className="mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900">Code Editor</h2>
-        <div className="p-6 rounded-lg border border-gray-200 bg-white">
-          <p className="text-gray-600 mb-4">
-            Use the code editor below to work on your challenge. You can write, test, and debug your code here.
-          </p>
-          <StackBlitzToggle 
-            document={fields.starterCode || {
-              nodeType: 'document',
-              content: [{
-                nodeType: 'paragraph',
-                content: [{
-                  nodeType: 'text',
-                  value: 'https://stackblitz.com/edit/web-platform-example'
-                }]
-              }]
-            }} 
-            testJS={testJS}
-          />
-        </div>
-      </section>
-
-    </div>
-  );
+  return <ChallengeContent challenge={challengeData} slug={slug} />;
 }

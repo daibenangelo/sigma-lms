@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -33,7 +32,7 @@ import { useAuth } from "@/contexts/auth-context";
 type ContentItem = {
   title: string;
   slug: string;
-  type: 'lesson' | 'quiz' | 'module-quiz' | 'tutorial' | 'challenge';
+  type: 'lesson' | 'quiz' | 'module-quiz' | 'module-project' | 'module-review' | 'tutorial' | 'challenge';
 };
 
 export function Navbar() {
@@ -78,7 +77,7 @@ export function Navbar() {
         return;
       }
 
-      const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
+      const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
       const currentItemIndex = content.findIndex(item => item.slug === currentSlug);
       const hasPrevious = currentItemIndex > 0;
       const hasNext = currentItemIndex < content.length - 1;
@@ -116,41 +115,125 @@ export function Navbar() {
     return urlParams.get('course') || '';
   };
 
+  // Get current module from URL (for module pages)
+  const getCurrentModule = () => {
+    if (!isClient) return '';
+    const urlParams = new URLSearchParams(window.location.search);
+    const moduleFromParams = urlParams.get('module');
+
+    // For module quiz pages, extract module from pathname since it doesn't use module parameter
+    if (pathname?.startsWith('/module-quiz')) {
+      const slug = pathname?.match(/\/module-quiz\/(.+)$/)?.[1];
+      console.log('[navbar] Module from pathname (quiz):', slug);
+      return slug || '';
+    }
+
+    console.log('[navbar] Module from URL params:', moduleFromParams);
+    return moduleFromParams || '';
+  };
+
   // Fetch content when pathname changes
   useEffect(() => {
     if (!isClient) return;
-    
+
     const course = getCurrentCourse();
-    if (!course) {
+    const module = getCurrentModule();
+    const isModulePage = pathname?.startsWith('/module-') || pathname?.startsWith('/module-quiz') || pathname?.startsWith('/module-review') || pathname?.startsWith('/module-project');
+
+    if (isModulePage) {
+      // For module pages, fetch module data and create module-level content items
+      fetch('/api/modules')
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          const modulesArray = Array.isArray(data) ? data : [];
+          const currentModuleData = modulesArray.find((m: any) => m.slug === module);
+
+          if (currentModuleData) {
+            // Create content items for module-level items
+            const moduleContent: ContentItem[] = [];
+
+            // Add module review if exists
+            if (currentModuleData.moduleReview?.fields?.slug) {
+              moduleContent.push({
+                title: currentModuleData.moduleReview.fields.title || 'Module Review',
+                slug: currentModuleData.moduleReview.fields.slug,
+                type: 'module-review'
+              });
+            }
+
+            // Add module quiz if exists
+            if (currentModuleData.moduleQuiz?.length > 0) {
+              moduleContent.push({
+                title: 'Module Quiz',
+                slug: module,
+                type: 'module-quiz'
+              });
+            }
+
+            // Add module project if exists
+            if (currentModuleData.moduleProject?.length > 0) {
+              currentModuleData.moduleProject.forEach((project: any, idx: number) => {
+                moduleContent.push({
+                  title: project.fields?.title || `Module Project ${idx + 1}`,
+                  slug: project.fields?.slug || `${module}-project-${idx}`,
+                  type: 'module-project'
+                });
+              });
+            } else {
+              // Add placeholder module project if none exist
+              moduleContent.push({
+                title: 'Module Project (Coming Soon)',
+                slug: `${module}-project-placeholder`,
+                type: 'module-project'
+              });
+            }
+
+            setContent(moduleContent);
+            setCourseName(`${currentModuleData.title} Module`);
+          } else {
+            setContent([]);
+            setCourseName("Module");
+          }
+        })
+        .catch((e) => {
+          console.error("[navbar] /api/modules fetch failed:", e);
+          setContent([]);
+        });
+    } else if (course) {
+      // For course pages, fetch course content
+      fetchLessons(course)
+        .then((data) => {
+          if (!data) {
+            setContent([]);
+            return;
+          }
+          const combined = Array.isArray(data.allContent) ? data.allContent : [];
+          setContent(combined);
+
+          if (data.courseName) {
+            setCourseName(data.courseName);
+          } else if (data.allContent && data.allContent.length > 0) {
+            setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
+          } else {
+            setCourseName("Course");
+          }
+        })
+        .catch((e) => {
+          console.error("[navbar] /api/lessons fetch failed:", e);
+          setContent([]);
+        });
+    } else {
       setContent([]);
       setCourseName("Course");
-      return;
     }
-
-    fetchLessons(course)
-      .then((data) => {
-        if (!data) {
-          setContent([]);
-          return;
-        }
-        const combined = Array.isArray(data.allContent) ? data.allContent : [];
-        setContent(combined);
-        
-        if (data.courseName) {
-          setCourseName(data.courseName);
-        } else if (data.allContent && data.allContent.length > 0) {
-          setCourseName(`${course.charAt(0).toUpperCase() + course.slice(1)} Course`);
-        } else {
-          setCourseName("Course");
-        }
-      })
-      .catch((e) => {
-        console.error("[navbar] /api/lessons fetch failed:", e);
-        setContent([]);
-      });
   }, [pathname, isClient]);
 
-  const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge)\/(.+)$/)?.[2];
+  const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
   const currentCourse = getCurrentCourse();
 
   // Navigation logic for next/previous items
@@ -173,9 +256,15 @@ export function Navbar() {
   const navigateToItem = (item: ContentItem) => {
     const urlParams = new URLSearchParams(window.location.search);
     const course = urlParams.get('course') || '';
+    const module = urlParams.get('module') || '';
+
     const href = item.type === 'quiz' ? `/quiz/${item.slug}?course=${course}` :
                 item.type === 'tutorial' ? `/tutorial/${item.slug}?course=${course}` :
                 item.type === 'challenge' ? `/challenge/${item.slug}?course=${course}` :
+                item.type === 'lesson' ? `/lesson/${item.slug}?course=${course}` :
+                item.type === 'module-quiz' ? `/module-quiz/${item.slug}` :
+                item.type === 'module-review' ? `/module-review/${item.slug}${module ? `?module=${module}` : ''}` :
+                item.type === 'module-project' ? (item.slug.includes('placeholder') ? '#' : `/module-project/${item.slug}${module ? `?module=${module}` : ''}`) :
                 `/lesson/${item.slug}?course=${course}`;
     window.location.href = href;
   };
@@ -202,6 +291,12 @@ export function Navbar() {
         return <Circle className="h-4 w-4" />;
       case 'challenge':
         return <Swords className="h-4 w-4" />;
+      case 'moduleReview':
+        return <BookOpen className="h-4 w-4" />;
+      case 'moduleQuiz':
+        return <Circle className="h-4 w-4" />;
+      case 'moduleProject':
+        return <Swords className="h-4 w-4" />;
       default:
         return <BookOpen className="h-4 w-4" />;
     }
@@ -217,6 +312,12 @@ export function Navbar() {
         return 'Quiz';
       case 'challenge':
         return 'Challenge';
+      case 'moduleReview':
+        return 'Review';
+      case 'moduleQuiz':
+        return 'Module Quiz';
+      case 'moduleProject':
+        return 'Module Project';
       default:
         return 'Content';
     }
@@ -228,8 +329,15 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo/Brand */}
           <div className="flex items-center gap-4 flex-shrink-0">
-            <Link href="/" className="text-xl font-bold text-gray-900">
-              Sigma School
+            <Link href="/" className="flex items-center gap-3">
+              <img
+                src="/brand.jpg"
+                alt="Sigma LMS Brand"
+                className="h-8 w-auto"
+              />
+              <span className="text-xl font-bold text-gray-900">
+                Sigma LMS
+              </span>
             </Link>
             {isClient && currentCourse && (
               <>
@@ -288,11 +396,6 @@ export function Navbar() {
                         </div>
                       </div>
                       <ChevronDown className="h-4 w-4 text-gray-400" />
-                      {navigationData.currentItem.type === 'challenge' && (
-                        <Badge variant="destructive" className="text-xs">
-                          Challenge
-                        </Badge>
-                      )}
                     </div>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-80 max-h-96 overflow-y-auto">
@@ -301,12 +404,21 @@ export function Navbar() {
                       const isTutorial = item.type === 'tutorial';
                       const isQuiz = item.type === 'quiz';
                       const isChallenge = item.type === 'challenge';
+                      const isModuleQuiz = item.type === 'module-quiz';
+                      const isModuleReview = item.type === 'module-review';
+                      const isModuleProject = item.type === 'module-project';
 
                       const urlParams = new URLSearchParams(window.location.search);
                       const course = urlParams.get('course') || '';
+                      const module = urlParams.get('module') || '';
+
                       const href = isQuiz ? `/quiz/${item.slug}?course=${course}` :
                                   isTutorial ? `/tutorial/${item.slug}?course=${course}` :
                                   isChallenge ? `/challenge/${item.slug}?course=${course}` :
+                                  isLesson ? `/lesson/${item.slug}?course=${course}` :
+                                  item.type === 'module-quiz' ? `/module-quiz/${item.slug}` :
+                                  item.type === 'module-review' ? `/module-review/${item.slug}${module ? `?module=${module}` : ''}` :
+                                  item.type === 'module-project' ? (item.slug.includes('placeholder') ? '#' : `/module-project/${item.slug}${module ? `?module=${module}` : ''}`) :
                                   `/lesson/${item.slug}?course=${course}`;
 
                       const isActive = navigationData.currentItem?.slug === item.slug;
@@ -328,11 +440,6 @@ export function Navbar() {
                                 {getTypeLabel(item.type)}
                               </p>
                             </div>
-                            {isChallenge && (
-                              <Badge variant="destructive" className="text-xs">
-                                Challenge
-                              </Badge>
-                            )}
                             {isActive && (
                               <div className="w-2 h-2 bg-blue-500 rounded-full ml-2" />
                             )}
@@ -483,11 +590,6 @@ export function Navbar() {
                             </div>
                           </div>
                           <ChevronDown className="h-4 w-4 text-gray-400" />
-                          {navigationData.currentItem.type === 'challenge' && (
-                            <Badge variant="destructive" className="text-xs">
-                              Challenge
-                            </Badge>
-                          )}
                         </div>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="center" className="w-80 max-h-96 overflow-y-auto">
@@ -496,12 +598,20 @@ export function Navbar() {
                           const isTutorial = item.type === 'tutorial';
                           const isQuiz = item.type === 'quiz';
                           const isChallenge = item.type === 'challenge';
+                          const isModuleQuiz = item.type === 'module-quiz';
+                          const isModuleReview = item.type === 'module-review';
+                          const isModuleProject = item.type === 'module-project';
 
                           const urlParams = new URLSearchParams(window.location.search);
                           const course = urlParams.get('course') || '';
+                          const module = urlParams.get('module') || '';
                           const href = isQuiz ? `/quiz/${item.slug}?course=${course}` :
                                       isTutorial ? `/tutorial/${item.slug}?course=${course}` :
                                       isChallenge ? `/challenge/${item.slug}?course=${course}` :
+                                      isLesson ? `/lesson/${item.slug}?course=${course}` :
+                                      isModuleQuiz ? `/module-quiz/${item.slug}${course ? `?course=${course}` : ''}` :
+                                      isModuleReview ? `/module-review/${item.slug}${module ? `?module=${module}` : ''}` :
+                                      isModuleProject ? (item.slug.includes('placeholder') ? '#' : `/module-project/${item.slug}${module ? `?module=${module}` : ''}`) :
                                       `/lesson/${item.slug}?course=${course}`;
 
                           const isActive = navigationData.currentItem?.slug === item.slug;
@@ -524,11 +634,6 @@ export function Navbar() {
                                     {getTypeLabel(item.type)}
                                   </p>
                                 </div>
-                                {isChallenge && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    Challenge
-                                  </Badge>
-                                )}
                                 {isActive && (
                                   <div className="w-2 h-2 bg-blue-500 rounded-full ml-2" />
                                 )}
