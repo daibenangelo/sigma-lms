@@ -22,8 +22,7 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
     slug,
     title: moduleQuizData.title,
     questionsCount: moduleQuizData.questions?.length || 0,
-    moduleTitle: moduleQuizData.moduleTitle,
-    hasError: !!moduleQuizData.error
+    moduleTitle: moduleQuizData.moduleTitle
   });
 
   useEffect(() => {

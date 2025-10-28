@@ -48,8 +48,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
     // Extract description from preview or content
     let description = "Hands-on coding challenge to practice programming skills and problem-solving.";
-    if (preview && preview.content && preview.content.length > 0) {
-      const firstParagraph = preview.content.find((node: any) => node.nodeType === 'paragraph');
+    if (preview && typeof preview === 'object' && 'content' in preview && Array.isArray(preview.content) && preview.content.length > 0) {
+      const previewData = preview as any; // Type assertion for Contentful data
+      const firstParagraph = previewData.content.find((node: any) => node.nodeType === 'paragraph');
       if (firstParagraph && firstParagraph.content) {
         const textContent = firstParagraph.content
           .filter((node: any) => node.nodeType === 'text')
@@ -61,8 +62,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
           description = textContent;
         }
       }
-    } else if (fields.content && fields.content.content && fields.content.content.length > 0) {
-      const firstParagraph = fields.content.content.find((node: any) => node.nodeType === 'paragraph');
+    } else if (fields.content && typeof fields.content === 'object' && 'content' in fields.content && Array.isArray(fields.content.content) && fields.content.content.length > 0) {
+      const contentData = fields.content as any; // Type assertion for Contentful data
+      const firstParagraph = contentData.content.find((node: any) => node.nodeType === 'paragraph');
       if (firstParagraph && firstParagraph.content) {
         const textContent = firstParagraph.content
           .filter((node: any) => node.nodeType === 'text')
@@ -79,7 +81,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     return {
       title: `${title} | Sigma LMS`,
       description,
-      keywords: ["challenge", "programming", "coding", "software development", "practice", title.toLowerCase()],
+      keywords: ["challenge", "programming", "coding", "software development", "practice", typeof title === 'string' ? title.toLowerCase() : "challenge"],
       openGraph: {
         title: `${title} | Sigma LMS`,
         description,

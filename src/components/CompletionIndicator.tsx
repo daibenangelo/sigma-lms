@@ -133,7 +133,8 @@ export default function CompletionIndicator({ type, slug, course, module }: Prop
         // Fallback to API if localStorage is not available
         const apiUrl = type === 'moduleQuiz'
           ? `/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}`
-          : `/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`;
+          : course ? `/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}&courseSlug=${encodeURIComponent(course)}`
+                  : `/api/quiz-attempts?quizSlug=${encodeURIComponent(slug)}`;
         const res = await fetch(apiUrl);
         if (!res.ok) {
           setCompleted(false);

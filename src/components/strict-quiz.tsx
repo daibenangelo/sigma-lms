@@ -52,6 +52,10 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug, quizType = 're
   // Load last attempt and check for perfect score on mount
   useEffect(() => {
     const loadLastAttempt = async () => {
+      // Check localStorage for perfect score and latest attempt
+      let localPerfect = false;
+      let localLatestAttempt: any = null;
+
       try {
         if (!quizSlug || !user) {
           setIsLoading(false);
@@ -66,9 +70,6 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug, quizType = 're
           }
           return key.startsWith(`quiz-${quizSlug}-`);
         });
-
-        let localPerfect = false;
-        let localLatestAttempt = null;
 
         for (const key of attemptKeys) {
           try {
@@ -98,8 +99,8 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug, quizType = 're
           setHasPerfectScore(dbPerfect);
 
           setLastAttempt({
-            score: validation.databaseData.score ?? 0,
-            total: validation.databaseData.total_questions ?? questions.length,
+            score: 0, // Score not available in database data
+            total: questions.length, // Use current questions length as total
             percentage: validation.databaseData.score_percentage ?? 0,
             passed: validation.databaseData.passed ?? false,
             when: validation.databaseData.completed_at || undefined
@@ -116,8 +117,8 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug, quizType = 're
           // Use localStorage data (database unavailable or no database data)
           setHasPerfectScore(localPerfect);
           setLastAttempt({
-            score: validation.localData.score ?? 0,
-            total: validation.localData.total_questions ?? questions.length,
+            score: 0, // Score not available in localStorage data
+            total: questions.length, // Use current questions length as total
             percentage: validation.localData.score_percentage ?? 0,
             passed: validation.localData.passed ?? false,
             when: validation.localData.completed_at || undefined
@@ -135,8 +136,8 @@ export function StrictQuiz({ questions, title = "Quiz", quizSlug, quizType = 're
         setHasPerfectScore(localPerfect);
         if (localLatestAttempt) {
           setLastAttempt({
-            score: localLatestAttempt.score ?? 0,
-            total: localLatestAttempt.total_questions ?? questions.length,
+            score: 0, // Score not available in localStorage data
+            total: questions.length, // Use current questions length as total
             percentage: localLatestAttempt.score_percentage ?? 0,
             passed: localLatestAttempt.passed ?? false,
             when: localLatestAttempt.completed_at || undefined

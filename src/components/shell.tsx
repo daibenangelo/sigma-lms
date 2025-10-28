@@ -13,7 +13,7 @@ export function Shell({ children }: ShellProps) {
   const pathname = usePathname();
 
   // Pages that should not show navbar and sidebar
-  const standalonePages = [];
+  const standalonePages: string[] = [];
 
   // Pages that should show navbar but not sidebar
   const navbarOnlyPages = [

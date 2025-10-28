@@ -23,17 +23,18 @@ export default function QuizLastScore({ quizSlug }: Props) {
 
   const fetchLast = async () => {
     console.log('[QuizLastScore] fetchLast called for quiz:', quizSlug);
+
+    // Get localStorage data first
+    const latestKey = `quiz-last-${quizSlug}`;
+    const localData = typeof window !== 'undefined' ? localStorage.getItem(latestKey) : null;
+    let localAttempt: any = null;
+
     try {
       if (!user) {
         console.log('[QuizLastScore] No user found, cannot fetch quiz data');
         setLoaded(true);
         return;
       }
-
-      // Get localStorage data first
-      const latestKey = `quiz-last-${quizSlug}`;
-      const localData = typeof window !== 'undefined' ? localStorage.getItem(latestKey) : null;
-      let localAttempt = null;
 
       if (localData) {
         try {
@@ -53,8 +54,8 @@ export default function QuizLastScore({ quizSlug }: Props) {
         // Use database data (most accurate)
         console.log('[QuizLastScore] Using database data:', validation.databaseData);
         setHasAttempt(true);
-        setScore(validation.databaseData.score ?? null);
-        setTotal(validation.databaseData.total_questions ?? null);
+        setScore(null); // Score not available in database data
+        setTotal(null); // Total questions not available in database data
         setPercentage(validation.databaseData.score_percentage ?? null);
         setPassed(validation.databaseData.passed ?? null);
         setWhen(validation.databaseData.completed_at ?? null);
@@ -67,8 +68,8 @@ export default function QuizLastScore({ quizSlug }: Props) {
         // Use localStorage data (database unavailable or no database data)
         console.log('[QuizLastScore] Using localStorage data:', validation.localData);
         setHasAttempt(true);
-        setScore(validation.localData.score ?? null);
-        setTotal(validation.localData.total_questions ?? null);
+        setScore(null); // Score not available in localStorage data
+        setTotal(null); // Total questions not available in localStorage data
         setPercentage(validation.localData.score_percentage ?? null);
         setPassed(validation.localData.passed ?? null);
         setWhen(validation.localData.completed_at ?? null);
@@ -119,8 +120,8 @@ export default function QuizLastScore({ quizSlug }: Props) {
       // Fallback to localStorage only
       if (localAttempt) {
         setHasAttempt(true);
-        setScore(localAttempt.score ?? null);
-        setTotal(localAttempt.total_questions ?? null);
+        setScore(null); // Score not available in localStorage data
+        setTotal(null); // Total questions not available in localStorage data
         setPercentage(localAttempt.score_percentage ?? null);
         setPassed(localAttempt.passed ?? null);
         setWhen(localAttempt.completed_at ?? null);

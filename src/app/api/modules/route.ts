@@ -28,7 +28,7 @@ async function getModules() {
         id: module.sys.id,
         title: module.fields.title || 'Untitled Module',
         slug: moduleSlug || '',
-          courses: module.fields?.courses?.map((course: any) => ({
+          courses: Array.isArray(module.fields?.courses) ? module.fields.courses.map((course: any) => ({
             id: course.sys?.id || '',
             title: course.fields?.title || 'Untitled Course',
             slug: course.fields?.slug || '',
@@ -37,7 +37,7 @@ async function getModules() {
             tutorialCount: 0,
             challengeCount: 0,
             progressPercentage: 0,
-          })) || [],
+          })) : [],
         moduleQuiz: [{
           sys: { id: `module-quiz-${module.sys.id}` },
           fields: {
@@ -54,7 +54,7 @@ async function getModules() {
       id: module.sys.id,
       title: module.fields.title || 'Untitled Module',
       slug: moduleSlug,
-      courses: (module.fields?.courses || []).map((course: any) => ({
+      courses: Array.isArray(module.fields?.courses) ? module.fields.courses.map((course: any) => ({
         id: course.sys?.id || '',
         title: course.fields?.title || 'Untitled Course',
         slug: course.fields?.slug || '',
@@ -63,8 +63,8 @@ async function getModules() {
         tutorialCount: 0,
         challengeCount: 0,
         progressPercentage: 0,
-      })),
-      moduleQuiz: module.fields?.moduleQuiz?.length > 0 ? module.fields.moduleQuiz : [{
+      })) : [],
+      moduleQuiz: (Array.isArray(module.fields?.moduleQuiz) && module.fields.moduleQuiz.length > 0) ? module.fields.moduleQuiz : [{
         sys: { id: `module-quiz-${moduleSlug}` },
         fields: {
           title: 'Module Quiz',

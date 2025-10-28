@@ -82,7 +82,7 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
 
       {project.fields.content ? (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <RichText content={project.fields.content} />
+          <RichText document={project.fields.content} />
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
