@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { RichText } from "@/components/rich-text";
+import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 import CompletionIndicator from "@/components/CompletionIndicator";
 
 interface ModuleProjectContentProps {
@@ -13,6 +14,7 @@ interface ModuleProjectContentProps {
       preview?: any;
       goal?: any;
       requirements?: any;
+      starterCode?: any;
       description?: string;
     };
   };
@@ -106,6 +108,26 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
             <RichText document={project.fields.requirements} />
           </div>
         )}
+
+        {/* Code Editor Section */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Code Editor</h2>
+          <p className="text-gray-600 mb-4">
+            Use the code editor below to work on your module project. You can write, test, and debug your code here.
+          </p>
+          <StackBlitzToggle
+            document={project.fields.starterCode || {
+              nodeType: 'document',
+              content: [{
+                nodeType: 'paragraph',
+                content: [{
+                  nodeType: 'text',
+                  value: 'https://stackblitz.com/edit/web-platform-example'
+                }]
+              }]
+            }}
+          />
+        </div>
 
         {/* Fallback if no content */}
         {!project.fields.preview && !project.fields.goal && !project.fields.requirements && (
