@@ -42,6 +42,7 @@ export function CourseSidebar() {
   const [sidebarWidth, setSidebarWidth] = useState<number>(320);
   const [completedItems, setCompletedItems] = useState<Set<string>>(new Set());
   const [viewedItems, setViewedItems] = useState<Set<string>>(new Set());
+  const [effectiveModule, setEffectiveModule] = useState<string>('');
   const isResizingRef = useRef<boolean>(false);
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(320);
@@ -58,23 +59,12 @@ export function CourseSidebar() {
   const getCurrentModule = () => {
     if (typeof window === 'undefined') return '';
     const urlParams = new URLSearchParams(window.location.search);
-    const moduleFromParams = urlParams.get('module');
-    console.log('[sidebar] Full URL:', window.location.href);
-    console.log('[sidebar] Search params:', window.location.search);
-    console.log('[sidebar] Module from URL params:', moduleFromParams);
-    return moduleFromParams || '';
+    return urlParams.get('module') || '';
   };
 
   const currentCourse = getCurrentCourse();
   const currentModule = getCurrentModule();
-  console.log("[sidebar] Module detection:", {
-    pathname,
-    currentCourse,
-    currentModule,
-    hasCourse: !!currentCourse,
-    hasModule: !!currentModule
-  });
-  
+
   const {
     progress,
     markItemCompleted,
@@ -82,7 +72,7 @@ export function CourseSidebar() {
     isItemCompleted,
     isItemViewed,
     saveProgress
-  } = useCourseProgress(currentCourse || currentModule);
+  } = useCourseProgress(currentCourse || effectiveModule);
 
   // Calculate progress - prioritize database progress, use sessionStorage as fallback
   const dbCompletedCount = progress?.completed_items?.length || 0;
@@ -144,16 +134,17 @@ export function CourseSidebar() {
     };
   }, []);
 
-      // Load completed items from sessionStorage for current course
+      // Load completed items from sessionStorage for current course or module
       useEffect(() => {
-        if (!currentCourse || !user) {
+        const contextKey = currentCourse || effectiveModule;
+        if (!contextKey || !user) {
           setCompletedItems(new Set());
           setViewedItems(new Set());
           return;
         }
 
-        const completedStorageKey = `completedItems_${user.id}_${currentCourse}`;
-        const viewedStorageKey = `viewedItems_${user.id}_${currentCourse}`;
+        const completedStorageKey = `completedItems_${user.id}_${contextKey}`;
+        const viewedStorageKey = `viewedItems_${user.id}_${contextKey}`;
 
         const storedCompleted = sessionStorage.getItem(completedStorageKey);
         const storedViewed = sessionStorage.getItem(viewedStorageKey);
@@ -162,9 +153,9 @@ export function CourseSidebar() {
           try {
             const completed = JSON.parse(storedCompleted);
             setCompletedItems(new Set(completed));
-            console.log(`[sidebar] Loaded completed items for course ${currentCourse}:`, completed);
+            console.log(`[sidebar] Loaded completed items for ${currentCourse ? 'course' : 'module'} ${contextKey}:`, completed);
           } catch (e) {
-            console.warn(`[sidebar] Failed to parse completed items for course ${currentCourse}:`, e);
+            console.warn(`[sidebar] Failed to parse completed items for ${currentCourse ? 'course' : 'module'} ${contextKey}:`, e);
             setCompletedItems(new Set());
           }
         } else {
@@ -175,42 +166,43 @@ export function CourseSidebar() {
           try {
             const viewed = JSON.parse(storedViewed);
             setViewedItems(new Set(viewed));
-            console.log(`[sidebar] Loaded viewed items for course ${currentCourse}:`, viewed);
+            console.log(`[sidebar] Loaded viewed items for ${currentCourse ? 'course' : 'module'} ${contextKey}:`, viewed);
           } catch (e) {
-            console.warn(`[sidebar] Failed to parse viewed items for course ${currentCourse}:`, e);
+            console.warn(`[sidebar] Failed to parse viewed items for ${currentCourse ? 'course' : 'module'} ${contextKey}:`, e);
             setViewedItems(new Set());
           }
         } else {
           setViewedItems(new Set());
         }
-      }, [currentCourse]);
+      }, [currentCourse, effectiveModule, user]);
 
   // Track current page as viewed (only mark as viewed when visiting, not completed)
   useEffect(() => {
     const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
-    if (currentSlug && totalCount > 0 && (currentCourse || currentModule) && user) {
+    const contextKey = currentCourse || effectiveModule;
+    if (currentSlug && totalCount > 0 && contextKey && user) {
       // Check if already viewed in database
       const isAlreadyViewed = isItemViewed(currentSlug);
-      
+
       if (!isAlreadyViewed) {
         // Mark as viewed in database
         markItemViewed(currentSlug, totalCount);
-        
+
         // Also update sessionStorage for immediate UI feedback
         setViewedItems(prevViewed => {
           if (!prevViewed.has(currentSlug)) {
             const newViewed = new Set(prevViewed);
             newViewed.add(currentSlug);
-            const viewedStorageKey = `viewedItems_${user.id}_${currentCourse}`;
+            const viewedStorageKey = `viewedItems_${user.id}_${contextKey}`;
             sessionStorage.setItem(viewedStorageKey, JSON.stringify([...newViewed]));
-            console.log(`[sidebar] Marked ${currentSlug} as viewed for course ${currentCourse} (database + sessionStorage)`);
+            console.log(`[sidebar] Marked ${currentSlug} as viewed for ${currentCourse ? 'course' : 'module'} ${contextKey} (database + sessionStorage)`);
             return newViewed;
           }
           return prevViewed;
         });
       }
     }
-  }, [pathname, currentCourse, totalCount, isItemViewed, markItemViewed]);
+  }, [pathname, currentCourse, effectiveModule, totalCount, isItemViewed, markItemViewed, user]);
 
 
   // Fetch modules
@@ -243,19 +235,36 @@ export function CourseSidebar() {
     const currentSlug = pathname?.match(/\/(lesson|quiz|tutorial|challenge|module-quiz|module-review|module-project)\/(.+)$/)?.[2];
     const module = pathname?.startsWith('/module-quiz') ? currentSlug : moduleFromParams;
 
-    console.log('[sidebar] Module page detection:', {
-      pathname,
-      isModulePage,
-      currentSlug,
-      moduleFromParams,
-      module,
-      modulesCount: modules.length
-    });
 
-    if (isModulePage && module) {
-      // For module pages, show module structure
-      const currentModuleData = modules.find(m => m.slug === module);
-      console.log('[sidebar] Current module data:', currentModuleData);
+    if (isModulePage) {
+      // For module pages, try to find the module either from URL params or by looking up the current item
+      let currentModuleData = null;
+      let effectiveModule = module;
+
+      if (module) {
+        // If we have a module from URL params, use it
+        currentModuleData = modules.find(m => m.slug === module);
+      } else {
+        // If no module parameter, try to find the module by looking up the current item
+        // For module-review and module-project pages, we need to find which module contains this item
+        if (pathname?.startsWith('/module-review/') && currentSlug) {
+          // Find module that has this review
+          currentModuleData = modules.find(m =>
+            m.moduleReview?.fields?.slug === currentSlug
+          );
+          if (currentModuleData) {
+            effectiveModule = currentModuleData.slug;
+          }
+        } else if (pathname?.startsWith('/module-project/') && currentSlug) {
+          // Find module that has this project
+          currentModuleData = modules.find(m =>
+            m.moduleProject?.some((p: any) => p.fields?.slug === currentSlug)
+          );
+          if (currentModuleData) {
+            effectiveModule = currentModuleData.slug;
+          }
+        }
+      }
 
       if (currentModuleData) {
         setModuleName(currentModuleData.title);
@@ -269,7 +278,7 @@ export function CourseSidebar() {
             title: currentModuleData.moduleReview.fields.title || 'Module Review',
             slug: currentModuleData.moduleReview.fields.slug,
             type: 'module-review',
-            moduleSlug: module
+            moduleSlug: effectiveModule
           });
         }
 
@@ -277,9 +286,9 @@ export function CourseSidebar() {
         if (currentModuleData.moduleQuiz?.length > 0) {
           moduleContent.push({
             title: 'Module Quiz',
-            slug: module,
+            slug: effectiveModule,
             type: 'module-quiz',
-            moduleSlug: module
+            moduleSlug: effectiveModule
           });
         }
 
@@ -288,23 +297,30 @@ export function CourseSidebar() {
           currentModuleData.moduleProject.forEach((project: any, idx: number) => {
             moduleContent.push({
               title: project.fields?.title || `Module Project ${idx + 1}`,
-              slug: project.fields?.slug || `${module}-project-${idx}`,
+              slug: project.fields?.slug || `${effectiveModule}-project-${idx}`,
               type: 'module-project',
-              moduleSlug: module
+              moduleSlug: effectiveModule
             });
           });
         } else {
           // Add placeholder module project if none exist
           moduleContent.push({
             title: 'Module Project (Coming Soon)',
-            slug: `${module}-project-placeholder`,
+            slug: `${effectiveModule}-project-placeholder`,
             type: 'module-project',
-            moduleSlug: module
+            moduleSlug: effectiveModule
           });
         }
 
         setContent(moduleContent);
         setCourseName(`${currentModuleData.title} Module`);
+        setEffectiveModule(effectiveModule); // Update the effective module for progress tracking
+      } else {
+        // If we couldn't find the module, show a fallback
+        setContent([]);
+        setCourseName("Module");
+        setModuleName("Module");
+        setEffectiveModule(''); // Clear effective module
       }
     } else if (course) {
       // For course pages, show course content
@@ -374,15 +390,16 @@ export function CourseSidebar() {
 
   // Function to mark an item as completed (called when requirements are met)
   const markItemAsCompleted = (slug: string) => {
-    if (!currentCourse || !user) return;
+    const contextKey = currentCourse || effectiveModule;
+    if (!contextKey || !user) return;
 
     setCompletedItems(prevCompleted => {
       if (!prevCompleted.has(slug)) {
         const newCompleted = new Set(prevCompleted);
         newCompleted.add(slug);
-        const storageKey = `completedItems_${user.id}_${currentCourse}`;
+        const storageKey = `completedItems_${user.id}_${contextKey}`;
         sessionStorage.setItem(storageKey, JSON.stringify([...newCompleted]));
-        console.log(`[sidebar] Marked ${slug} as completed for course ${currentCourse}`);
+        console.log(`[sidebar] Marked ${slug} as completed for ${currentCourse ? 'course' : 'module'} ${contextKey}`);
         return newCompleted;
       }
       return prevCompleted;
