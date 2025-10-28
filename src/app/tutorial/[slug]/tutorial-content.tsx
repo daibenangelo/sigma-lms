@@ -30,8 +30,8 @@ export default function TutorialContent({ tutorial, slug }: TutorialContentProps
           const viewedStored = sessionStorage.getItem(viewedStorageKey);
           const completedStored = sessionStorage.getItem(completedStorageKey);
 
-          let viewedItems = viewedStored ? JSON.parse(viewedStored) : [];
-          let completedItems = completedStored ? JSON.parse(completedStored) : [];
+          const viewedItems = viewedStored ? JSON.parse(viewedStored) : [];
+          const completedItems = completedStored ? JSON.parse(completedStored) : [];
 
           // Add current timestamp for last viewed tracking
           const now = new Date().toISOString();

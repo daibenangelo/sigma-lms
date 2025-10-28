@@ -43,7 +43,7 @@ async function getModuleQuiz(moduleSlug: string) {
     const module = modules[0];
     const moduleCourses = module.fields?.courses || [];
 
-    if (moduleCourses.length === 0) {
+    if (!Array.isArray(moduleCourses) || moduleCourses.length === 0) {
       return {
         questions: [],
         title: `${module.fields?.title || 'Module'} Quiz`,
@@ -84,16 +84,19 @@ async function getModuleQuiz(moduleSlug: string) {
     // Process each linked moduleQuiz (Chapter Quiz) to extract questions
     // This follows the same pattern as src/app/quiz/[slug]/page.tsx
     for (const chapterQuiz of linkedModuleQuizzes) {
-      console.log(`[module-quiz] Processing Chapter Quiz: ${chapterQuiz.fields?.title}`);
-      console.log(`[module-quiz] Chapter Quiz has quiz field:`, !!chapterQuiz.fields?.quiz);
-      console.log(`[module-quiz] Chapter Quiz quiz count:`, Array.isArray(chapterQuiz.fields?.quiz) ? chapterQuiz.fields.quiz.length : 0);
+      if (!chapterQuiz || typeof chapterQuiz !== 'object' || !('fields' in chapterQuiz)) continue;
+
+      const quizData = chapterQuiz as any; // Type assertion for Contentful data
+      console.log(`[module-quiz] Processing Chapter Quiz: ${quizData.fields?.title}`);
+      console.log(`[module-quiz] Chapter Quiz has quiz field:`, !!quizData.fields?.quiz);
+      console.log(`[module-quiz] Chapter Quiz quiz count:`, Array.isArray(quizData.fields?.quiz) ? quizData.fields.quiz.length : 0);
 
       // Each Chapter Quiz (moduleQuiz) has a 'quiz' field containing Quiz entries
-      const linkedQuestions: any[] = Array.isArray(chapterQuiz.fields?.quiz)
-        ? chapterQuiz.fields.quiz
+      const linkedQuestions: any[] = Array.isArray(quizData.fields?.quiz)
+        ? quizData.fields.quiz
         : [];
 
-      console.log(`[module-quiz] Processing ${linkedQuestions.length} linked questions from ${chapterQuiz.fields?.title}`);
+      console.log(`[module-quiz] Processing ${linkedQuestions.length} linked questions from ${quizData.fields?.title}`);
 
       // Convert each Quiz entry to a question
       linkedQuestions.forEach((q: any, index: number) => {
@@ -121,7 +124,7 @@ async function getModuleQuiz(moduleSlug: string) {
         const explanation = richTextToPlainText(firstCorrectAnswer?.fields?.explanation);
 
         const quizQuestion = {
-          id: `q_${moduleSlug}_${chapterQuiz.fields?.slug}_${index}`,
+          id: `q_${moduleSlug}_${quizData.fields?.slug}_${index}`,
           question: q.fields?.quesionText || q.fields?.questionText || 'Question not available',
           options: options.length > 0 ? options : ['Answer A', 'Answer B', 'Answer C', 'Answer D'],
           correctAnswer: correctAnswer,
@@ -130,7 +133,7 @@ async function getModuleQuiz(moduleSlug: string) {
           moduleSlug,
           courseSlug: 'module',
           courseTitle: module.fields?.title || 'Module',
-          lessonTitle: chapterQuiz.fields?.title || 'Module Quiz'
+          lessonTitle: quizData.fields?.title || 'Module Quiz'
         };
 
         console.log(`[module-quiz] Added question:`, {

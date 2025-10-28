@@ -26,24 +26,6 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
     hasError: !!moduleQuizData.error
   });
 
-  // If no questions, show a message
-  if (!moduleQuizData.questions || moduleQuizData.questions.length === 0) {
-    return (
-      <div className="max-w-4xl mx-auto pb-[30vh]">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">{moduleQuizData.title}</h1>
-          <p className="text-gray-600 mb-2">Software Development Programme · Module Quiz</p>
-          <p className="text-gray-600 mb-4">No questions available for this module quiz yet.</p>
-        </div>
-        <div className="text-center py-12">
-          <div className="text-gray-500">
-            <p>This module quiz will be available once content is added to the module.</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   useEffect(() => {
     // Track this module quiz as viewed when the component mounts
     if (user && typeof window !== 'undefined') {
@@ -57,8 +39,8 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
         const viewedStored = sessionStorage.getItem(viewedStorageKey);
         const completedStored = sessionStorage.getItem(completedStorageKey);
 
-        let viewedItems = viewedStored ? JSON.parse(viewedStored) : [];
-        let completedItems = completedStored ? JSON.parse(completedStored) : [];
+        const viewedItems = viewedStored ? JSON.parse(viewedStored) : [];
+        const completedItems = completedStored ? JSON.parse(completedStored) : [];
 
         // Add current timestamp for last viewed tracking
         const now = new Date().toISOString();
@@ -95,6 +77,24 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
       }
     }
   }, [user, slug, moduleQuizData.title]);
+
+  // If no questions, show a message
+  if (!moduleQuizData.questions || moduleQuizData.questions.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto pb-[30vh]">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-2">{moduleQuizData.title}</h1>
+          <p className="text-gray-600 mb-2">Software Development Programme · Module Quiz</p>
+          <p className="text-gray-600 mb-4">No questions available for this module quiz yet.</p>
+        </div>
+        <div className="text-center py-12">
+          <div className="text-gray-500">
+            <p>This module quiz will be available once content is added to the module.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto pb-[30vh]">

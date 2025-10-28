@@ -20,7 +20,7 @@ const getCachedCourseContent = (courseSlug: string) => unstable_cache(
       const course = courses[0];
       const courseChapters = course.fields?.chapters || [];
 
-      if (courseChapters.length === 0) {
+      if (!Array.isArray(courseChapters) || courseChapters.length === 0) {
         return { quizCount: 0, tutorialCount: 0, challengeCount: 0 };
       }
 

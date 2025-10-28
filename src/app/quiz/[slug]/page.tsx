@@ -27,8 +27,8 @@ type Params = {
   params: { slug: string };
 };
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const { slug } = params;
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
 
   try {
     const chapterQuizItems = await getEntriesByContentType<{

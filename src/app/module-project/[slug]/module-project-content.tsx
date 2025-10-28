@@ -30,7 +30,7 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
 
       try {
         const viewedStored = sessionStorage.getItem(viewedStorageKey);
-        let viewedItems = viewedStored ? JSON.parse(viewedStored) : [];
+        const viewedItems = viewedStored ? JSON.parse(viewedStored) : [];
 
         // Add current timestamp for last viewed tracking
         const now = new Date().toISOString();
