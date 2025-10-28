@@ -29,7 +29,7 @@ async function getModuleQuiz(moduleSlug: string) {
       courses?: any[];
     }>(
       "module",
-      { limit: 1, "fields.slug": moduleSlug, include: 10 }
+      { limit: 1, "fields.slug": moduleSlug, include: 15 }
     );
 
     if (modules.length === 0) {
@@ -213,15 +213,6 @@ export async function GET(request: Request) {
         { error: "Module slug is required" },
         { status: 400 }
       );
-    }
-
-    // Add debug info for production troubleshooting
-    if (process.env.NODE_ENV === 'production') {
-      console.log('[api/module-quiz] Debug info:', {
-        moduleSlug,
-        contentfulEnv: process.env.CONTENTFUL_ENVIRONMENT,
-        spaceId: process.env.CONTENTFUL_SPACE_ID?.substring(0, 8) + '...'
-      });
     }
 
     const result = await getModuleQuiz(moduleSlug);

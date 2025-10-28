@@ -10,7 +10,9 @@ interface ModuleProjectContentProps {
     fields: {
       title?: string;
       slug?: string;
-      content?: any;
+      preview?: any;
+      goal?: any;
+      requirements?: any;
       description?: string;
     };
   };
@@ -80,19 +82,42 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
         <CompletionIndicator type="moduleProject" slug={slug} module={new URLSearchParams(window.location.search).get('module') || ''} />
       </div>
 
-      {project.fields.content ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <RichText document={project.fields.content} />
-        </div>
-      ) : (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="text-center py-12">
-            <div className="text-gray-500">
-              <p>{project.fields.description || 'Project content will be available soon.'}</p>
+      <div className="space-y-6">
+        {/* Preview Section */}
+        {project.fields.preview && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Project Preview</h2>
+            <RichText document={project.fields.preview} />
+          </div>
+        )}
+
+        {/* Goal Section */}
+        {project.fields.goal && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Project Goal</h2>
+            <RichText document={project.fields.goal} />
+          </div>
+        )}
+
+        {/* Requirements Section */}
+        {project.fields.requirements && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold mb-4 text-gray-900">Requirements</h2>
+            <RichText document={project.fields.requirements} />
+          </div>
+        )}
+
+        {/* Fallback if no content */}
+        {!project.fields.preview && !project.fields.goal && !project.fields.requirements && (
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="text-center py-12">
+              <div className="text-gray-500">
+                <p>{project.fields.description || 'Project content will be available soon.'}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
