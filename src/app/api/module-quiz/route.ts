@@ -215,6 +215,15 @@ export async function GET(request: Request) {
       );
     }
 
+    // Add debug info for production troubleshooting
+    if (process.env.NODE_ENV === 'production') {
+      console.log('[api/module-quiz] Debug info:', {
+        moduleSlug,
+        contentfulEnv: process.env.CONTENTFUL_ENVIRONMENT,
+        spaceId: process.env.CONTENTFUL_SPACE_ID?.substring(0, 8) + '...'
+      });
+    }
+
     const result = await getModuleQuiz(moduleSlug);
 
     // If there's an error in the result, return it with appropriate status

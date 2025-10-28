@@ -83,6 +83,22 @@ export async function GET() {
   try {
     const modules = await getModules();
 
+    // Add debug info for production troubleshooting
+    if (process.env.NODE_ENV === 'production') {
+      console.log('[api/modules] Debug info:', {
+        contentfulEnv: process.env.CONTENTFUL_ENVIRONMENT,
+        spaceId: process.env.CONTENTFUL_SPACE_ID?.substring(0, 8) + '...',
+        modulesType: typeof modules,
+        isArray: Array.isArray(modules),
+        modulesCount: Array.isArray(modules) ? modules.length : 0,
+        firstModule: Array.isArray(modules) && modules.length > 0 ? {
+          title: modules[0].title,
+          slug: modules[0].slug
+        } : null,
+        hasError: modules && typeof modules === 'object' && 'error' in modules
+      });
+    }
+
     // If there's an error in the result, return it
     if (modules && typeof modules === 'object' && 'error' in modules) {
       return NextResponse.json(modules, { status: 404 });
