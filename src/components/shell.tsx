@@ -25,6 +25,15 @@ export function Shell({ children }: ShellProps) {
   // Check if current path is a module page
   const isModulePage = pathname?.startsWith('/module-') || pathname?.startsWith('/module-quiz') || pathname?.startsWith('/module-review') || pathname?.startsWith('/module-project');
 
+  // Debug logging for module pages
+  if (isModulePage) {
+    console.log('[Shell] Module page detected:', {
+      pathname,
+      isModulePage,
+      willShowSidebar: true
+    });
+  }
+
   // Auth pages that should not show navbar and sidebar
   const authPages = [
     "/auth/login",

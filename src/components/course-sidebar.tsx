@@ -58,12 +58,22 @@ export function CourseSidebar() {
   const getCurrentModule = () => {
     if (typeof window === 'undefined') return '';
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('module') || '';
+    const moduleFromParams = urlParams.get('module');
+    console.log('[sidebar] Full URL:', window.location.href);
+    console.log('[sidebar] Search params:', window.location.search);
+    console.log('[sidebar] Module from URL params:', moduleFromParams);
+    return moduleFromParams || '';
   };
 
   const currentCourse = getCurrentCourse();
   const currentModule = getCurrentModule();
-  console.log("[sidebar] Current course:", currentCourse);
+  console.log("[sidebar] Module detection:", {
+    pathname,
+    currentCourse,
+    currentModule,
+    hasCourse: !!currentCourse,
+    hasModule: !!currentModule
+  });
   
   const {
     progress,
