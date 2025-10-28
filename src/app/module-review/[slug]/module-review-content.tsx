@@ -63,7 +63,7 @@ export default function ModuleReviewContent({ review, slug, moduleSlug }: Module
         }
       }
     }
-  }, [user, slug, review.fields.topic, review.fields.title]);
+  }, [user, slug, moduleSlug]);
 
   return (
     <div className="max-w-4xl mx-auto pb-[30vh]">
