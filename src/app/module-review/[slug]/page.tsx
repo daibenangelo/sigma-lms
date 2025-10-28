@@ -18,8 +18,8 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
       : 'http://localhost:3000';
 
     const apiUrl = moduleSlug
-      ? `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}&module=${encodeURIComponent(moduleSlug)}`
-      : `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}`;
+      ? `${baseUrl}/api/module-project?projectSlug=${slug}&module=${encodeURIComponent(moduleSlug)}`
+      : `${baseUrl}/api/module-project?projectSlug=${slug}`;
 
     const response = await fetch(apiUrl, {
       cache: 'no-store',
@@ -32,11 +32,11 @@ export async function generateMetadata({ params, searchParams }: { params: Promi
 
     const data = await response.json();
 
-    if (data.error || !data.review) {
+    if (data.error || !data.project) {
       throw new Error(data.error || "Review not found");
     }
 
-    const review = data.review;
+    const review = data.project;
     const topic = review.fields?.topic || "Module Review";
 
     return {
@@ -69,51 +69,24 @@ export default async function ModuleReviewPage({ params, searchParams }: { param
   const moduleSlug = typeof search.module === 'string' ? search.module : undefined;
 
   try {
-    // Fetch from our API route
-    const baseUrl = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000';
+    // For now, we'll still fetch directly from Contentful since we don't have a dedicated module-review API
+    // In the future, we could create one similar to module-project
+    const { getEntriesByContentType } = await import("@/lib/contentful");
 
-    const apiUrl = moduleSlug
-      ? `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}&module=${encodeURIComponent(moduleSlug)}`
-      : `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}`;
+    const reviews = await getEntriesByContentType<{
+      topic?: string;
+      slug?: string;
+      content?: any;
+    }>("moduleReview", { limit: 1, "fields.slug": slug, include: 10 });
 
-    const response = await fetch(apiUrl, {
-      cache: 'no-store',
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+    const review = reviews[0];
+    if (!review) {
+      notFound();
     }
 
-    const data = await response.json();
-
-    if (data.error) {
-      console.error("API error:", data.error);
-      // Create a placeholder review for missing content
-      const placeholderReview = {
-        fields: {
-          topic: 'Module Review',
-          slug: slug,
-          content: null
-        }
-      };
-      return <ModuleReviewContent review={placeholderReview} slug={slug} />;
-    }
-
-    return <ModuleReviewContent review={data.review} slug={slug} />;
-
+    return <ModuleReviewContent review={review} slug={slug} moduleSlug={moduleSlug} />;
   } catch (error) {
     console.error("Error loading module review:", error);
-    // Create a placeholder review for errors
-    const placeholderReview = {
-      fields: {
-        topic: 'Module Review',
-        slug: slug,
-        content: null
-      }
-    };
-    return <ModuleReviewContent review={placeholderReview} slug={slug} />;
+    notFound();
   }
 }
