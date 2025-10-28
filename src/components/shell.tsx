@@ -66,7 +66,6 @@ export function Shell({ children }: ShellProps) {
       <div className="min-h-screen bg-gray-50">
         <Navbar />
         <div className="flex">
-          {pathname?.startsWith('/module-project') && <div className="text-xs text-red-500 p-2 bg-red-50 border">DEBUG: Sidebar should be here</div>}
           <CourseSidebar />
           <main className="flex-1 pl-80">
             {children}

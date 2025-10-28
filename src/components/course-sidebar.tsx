@@ -33,8 +33,6 @@ type ContentItem = {
 
 export function CourseSidebar() {
   const pathname = usePathname();
-
-  console.log('[CourseSidebar] Rendered for pathname:', pathname);
   const { user } = useAuth();
   const [content, setContent] = useState<ContentItem[]>([]);
   const [modules, setModules] = useState<any[]>([]);
@@ -61,6 +59,8 @@ export function CourseSidebar() {
     if (typeof window === 'undefined') return '';
     const urlParams = new URLSearchParams(window.location.search);
     const moduleFromParams = urlParams.get('module');
+    console.log('[sidebar] Full URL:', window.location.href);
+    console.log('[sidebar] Search params:', window.location.search);
     console.log('[sidebar] Module from URL params:', moduleFromParams);
     return moduleFromParams || '';
   };
