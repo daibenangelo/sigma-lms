@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { RichText } from "@/components/rich-text";
 import { StackBlitzToggle } from "@/components/stackblitz-toggle";
@@ -23,12 +23,19 @@ interface ModuleProjectContentProps {
 
 export default function ModuleProjectContent({ project, slug }: ModuleProjectContentProps) {
   const { user } = useAuth();
+  const [moduleSlug, setModuleSlug] = useState('');
+
+  useEffect(() => {
+    // Get module slug from URL
+    if (typeof window !== 'undefined') {
+      const urlModuleSlug = new URLSearchParams(window.location.search).get('module') || '';
+      setModuleSlug(urlModuleSlug);
+    }
+  }, []);
 
   useEffect(() => {
     // Track this module project as viewed when the component mounts
-    if (user && typeof window !== 'undefined') {
-      const moduleSlug = new URLSearchParams(window.location.search).get('module') || '';
-
+    if (user && moduleSlug) {
       // Update viewed items in sessionStorage
       const viewedStorageKey = `viewedItems_${user.id}_${moduleSlug}`;
 
@@ -70,7 +77,7 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
         console.warn('[ModuleProjectContent] Failed to update viewed items:', error);
       }
     }
-  }, [user, slug, project.fields.title]);
+  }, [user, slug, project.fields.title, moduleSlug]);
 
   return (
     <div className="max-w-4xl mx-auto pb-[30vh]">
@@ -81,7 +88,7 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
           <p className="text-gray-600 mb-4">{project.fields.description}</p>
         )}
 
-        <CompletionIndicator type="moduleProject" slug={slug} module={new URLSearchParams(window.location.search).get('module') || ''} />
+        <CompletionIndicator type="moduleProject" slug={slug} module={moduleSlug} />
       </div>
 
       <div className="space-y-6">
