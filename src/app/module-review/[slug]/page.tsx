@@ -1,63 +1,57 @@
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
-import { getEntriesByContentType } from "@/lib/contentful";
 import ModuleReviewContent from "./module-review-content";
 
 type Params = {
   params: Promise<{ slug: string }>;
 };
 
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }): Promise<Metadata> {
   const { slug } = await params;
+  const search = await searchParams;
+  const moduleSlug = typeof search.module === 'string' ? search.module : undefined;
 
   try {
-    const reviews = await getEntriesByContentType<{
-      topic?: string;
-      slug?: string;
-      content?: any;
-    }>("moduleReview", { limit: 1, "fields.slug": slug, include: 10 });
+    // Fetch from our API route
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
 
-    const review = reviews[0];
-    if (!review) {
-      return {
-        title: "Module Review Not Found | Sigma LMS",
-        description: "The requested module review could not be found.",
-      };
+    const apiUrl = moduleSlug
+      ? `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}&module=${encodeURIComponent(moduleSlug)}`
+      : `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}`;
+
+    const response = await fetch(apiUrl, {
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
     }
 
-    const topic = (review.fields as any).topic || "Module Review";
-    const content = (review.fields as any).content;
+    const data = await response.json();
 
-    // Extract description from content (first paragraph or preview text)
-    let description = "Module review and summary content.";
-    if (content && content.content && content.content.length > 0) {
-      const firstParagraph = content.content.find((node: any) => node.nodeType === 'paragraph');
-      if (firstParagraph && firstParagraph.content) {
-        const textContent = firstParagraph.content
-          .filter((node: any) => node.nodeType === 'text')
-          .map((node: any) => node.value)
-          .join(' ');
-        if (textContent.length > 50) {
-          description = textContent.substring(0, 150) + "...";
-        } else {
-          description = textContent;
-        }
-      }
+    if (data.error || !data.review) {
+      throw new Error(data.error || "Review not found");
     }
+
+    const review = data.review;
+    const topic = review.fields?.topic || "Module Review";
 
     return {
       title: `${topic} | Sigma LMS`,
-      description,
+      description: "Module review and summary content.",
       keywords: ["module review", "programming", "software development", "learning", topic.toLowerCase()],
       openGraph: {
         title: `${topic} | Sigma LMS`,
-        description,
+        description: "Module review and summary content.",
         type: "article",
       },
       twitter: {
         card: "summary",
         title: `${topic} | Sigma LMS`,
-        description,
+        description: "Module review and summary content.",
       },
     };
   } catch (error) {
@@ -69,18 +63,57 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   }
 }
 
-export default async function ModuleReviewPage({ params }: Params) {
+export default async function ModuleReviewPage({ params, searchParams }: { params: Promise<{ slug: string }>, searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
   const { slug } = await params;
-  const reviews = await getEntriesByContentType<{
-    topic?: string;
-    slug?: string;
-    content?: any;
-  }>("moduleReview", { limit: 1, "fields.slug": slug, include: 10 });
+  const search = await searchParams;
+  const moduleSlug = typeof search.module === 'string' ? search.module : undefined;
 
-  const review = reviews[0];
-  if (!review) {
-    notFound();
+  try {
+    // Fetch from our API route
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+
+    const apiUrl = moduleSlug
+      ? `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}&module=${encodeURIComponent(moduleSlug)}`
+      : `${baseUrl}/api/module-review?reviewSlug=${encodeURIComponent(slug)}`;
+
+    const response = await fetch(apiUrl, {
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.error) {
+      console.error("API error:", data.error);
+      // Create a placeholder review for missing content
+      const placeholderReview = {
+        fields: {
+          topic: 'Module Review',
+          slug: slug,
+          content: null
+        }
+      };
+      return <ModuleReviewContent review={placeholderReview} slug={slug} />;
+    }
+
+    return <ModuleReviewContent review={data.review} slug={slug} />;
+
+  } catch (error) {
+    console.error("Error loading module review:", error);
+    // Create a placeholder review for errors
+    const placeholderReview = {
+      fields: {
+        topic: 'Module Review',
+        slug: slug,
+        content: null
+      }
+    };
+    return <ModuleReviewContent review={placeholderReview} slug={slug} />;
   }
-
-  return <ModuleReviewContent review={review} slug={slug} />;
 }
