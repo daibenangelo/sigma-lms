@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { StrictQuiz } from "@/components/strict-quiz";
 import QuizLastScore from "@/components/quiz-last-score";
@@ -17,6 +17,7 @@ interface ModuleQuizContentProps {
 
 export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizContentProps) {
   const { user } = useAuth();
+  const [moduleSlug, setModuleSlug] = useState(''); // New state for moduleSlug
 
   console.log(`[ModuleQuizContent] Received data:`, {
     slug,
@@ -26,9 +27,16 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
   });
 
   useEffect(() => {
+    // Get module slug from URL on client side
+    if (typeof window !== 'undefined') {
+      const urlModuleSlug = new URLSearchParams(window.location.search).get('module') || slug;
+      setModuleSlug(urlModuleSlug);
+    }
+  }, [slug]); // Run once on client mount
+
+  useEffect(() => {
     // Track this module quiz as viewed when the component mounts
-    if (user && typeof window !== 'undefined') {
-      const moduleSlug = new URLSearchParams(window.location.search).get('module') || slug;
+    if (user && moduleSlug) {
 
       // Update viewed items in sessionStorage
       const viewedStorageKey = `viewedItems_${user.id}_${moduleSlug}`;
@@ -75,7 +83,7 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
         console.warn('[ModuleQuizContent] Failed to update viewed items:', error);
       }
     }
-  }, [user, slug, moduleQuizData.title]);
+  }, [user, slug, moduleQuizData.title, moduleSlug]); // Added moduleSlug to dependencies
 
   // If no questions, show a message
   if (!moduleQuizData.questions || moduleQuizData.questions.length === 0) {
@@ -104,7 +112,7 @@ export default function ModuleQuizContent({ moduleQuizData, slug }: ModuleQuizCo
           {moduleQuizData.questions.length} questions • All questions from {moduleQuizData.moduleTitle}
         </p>
 
-        <CompletionIndicator type="moduleQuiz" slug={slug} />
+        <CompletionIndicator type="moduleQuiz" slug={slug} module={moduleSlug} />
       </div>
 
       <StrictQuiz

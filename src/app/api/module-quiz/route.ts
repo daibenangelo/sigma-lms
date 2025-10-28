@@ -149,12 +149,15 @@ async function getModuleQuiz(moduleSlug: string) {
 
     console.log(`[module-quiz] Extracted ${allQuestions.length} questions total`);
 
-    // Limit to 100 questions max, equally distributed among chapter quizzes
-    const MAX_QUESTIONS = 100;
+    // Target 90-100 questions, equally distributed among chapter quizzes
+    const TARGET_MIN_QUESTIONS = 90;
+    const TARGET_MAX_QUESTIONS = 100;
     let finalQuestions: any[] = [];
 
-    if (allQuestions.length <= MAX_QUESTIONS) {
+    if (allQuestions.length < TARGET_MIN_QUESTIONS) {
+      // If we don't have enough questions, use all available
       finalQuestions = allQuestions;
+      console.log(`[module-quiz] Not enough questions (${allQuestions.length}), using all available`);
     } else {
       // Group questions by chapter quiz to distribute equally
       const questionsByQuiz: { [key: string]: any[] } = {};
@@ -168,20 +171,46 @@ async function getModuleQuiz(moduleSlug: string) {
       });
 
       const quizCount = Object.keys(questionsByQuiz).length;
-      const questionsPerQuiz = Math.floor(MAX_QUESTIONS / quizCount);
 
-      console.log(`[module-quiz] Distributing ${MAX_QUESTIONS} questions among ${quizCount} quizzes (${questionsPerQuiz} per quiz)`);
+      if (quizCount === 0) {
+        finalQuestions = allQuestions.slice(0, TARGET_MAX_QUESTIONS);
+        console.log(`[module-quiz] No quizzes found, taking first ${TARGET_MAX_QUESTIONS} questions`);
+      } else {
+        // Calculate how many questions to take from each quiz
+        // Aim for approximately equal distribution within 90-100 total
+        const totalQuestions = allQuestions.length;
+        let targetTotal = Math.min(TARGET_MAX_QUESTIONS, totalQuestions);
 
-      // Take questions from each quiz
-      Object.entries(questionsByQuiz).forEach(([quizSlug, questions]) => {
-        const questionsToTake = Math.min(questionsPerQuiz, questions.length);
-        const selectedQuestions = questions
-          .sort(() => Math.random() - 0.5) // Shuffle each quiz's questions
-          .slice(0, questionsToTake); // Take first N after shuffle
+        // If we have more than the max, try to get as close to 100 as possible
+        // while maintaining equal distribution
+        if (totalQuestions > TARGET_MAX_QUESTIONS) {
+          // Calculate base questions per quiz
+          const baseQuestionsPerQuiz = Math.floor(TARGET_MAX_QUESTIONS / quizCount);
+          const remainder = TARGET_MAX_QUESTIONS % quizCount;
 
-        finalQuestions.push(...selectedQuestions);
-        console.log(`[module-quiz] ${quizSlug}: ${questions.length} available, taking ${questionsToTake}`);
-      });
+          console.log(`[module-quiz] Distributing ${TARGET_MAX_QUESTIONS} questions among ${quizCount} quizzes (base: ${baseQuestionsPerQuiz}, remainder: ${remainder})`);
+
+          // Take questions from each quiz
+          let extraQuestionsAssigned = 0;
+          Object.entries(questionsByQuiz).forEach(([quizSlug, questions], index) => {
+            // First 'remainder' quizzes get one extra question to reach the target
+            const hasExtra = index < remainder;
+            if (hasExtra) extraQuestionsAssigned++;
+
+            const questionsToTake = Math.min(baseQuestionsPerQuiz + (hasExtra ? 1 : 0), questions.length);
+            const selectedQuestions = questions
+              .sort(() => Math.random() - 0.5) // Shuffle each quiz's questions
+              .slice(0, questionsToTake); // Take first N after shuffle
+
+            finalQuestions.push(...selectedQuestions);
+            console.log(`[module-quiz] ${quizSlug}: ${questions.length} available, taking ${questionsToTake}`);
+          });
+        } else {
+          // If we have between 90-100 questions already, just shuffle and use all
+          finalQuestions = allQuestions;
+          console.log(`[module-quiz] Using all ${totalQuestions} questions (within target range)`);
+        }
+      }
     }
 
     console.log(`[module-quiz] Final question count: ${finalQuestions.length}`);
