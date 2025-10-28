@@ -11,6 +11,47 @@ interface TerminalPopupProps {
   projectId: string;
 }
 
+// Helper function to generate error hints based on error type and message
+const getErrorHint = (errorName: string, errorMessage: string): string => {
+  const hints: Record<string, (msg: string) => string> = {
+    SyntaxError: (msg) => {
+      if (msg.includes('Unexpected token')) return '💡 Hint: Check for missing or extra brackets, parentheses, or semicolons.';
+      if (msg.includes('Unexpected identifier')) return '💡 Hint: You might have a typo in a variable name or missing a comma/semicolon.';
+      if (msg.includes('Unexpected end of input')) return '💡 Hint: You might be missing a closing bracket, brace, or parenthesis.';
+      if (msg.includes('Invalid or unexpected token')) return '💡 Hint: Check for invalid characters or incorrect syntax.';
+      return '💡 Hint: Review your code syntax. Look for typos, missing punctuation, or incorrect structure.';
+    },
+    ReferenceError: (msg) => {
+      if (msg.includes('is not defined')) return '💡 Hint: Make sure the variable or function is declared before using it.';
+      return '💡 Hint: You\'re trying to use something that doesn\'t exist. Check your variable and function names.';
+    },
+    TypeError: (msg) => {
+      if (msg.includes('is not a function')) return '💡 Hint: You\'re trying to call something that isn\'t a function. Check your code logic.';
+      if (msg.includes('Cannot read property')) return '💡 Hint: You\'re trying to access a property of null or undefined. Add a check before accessing.';
+      if (msg.includes('Cannot set property')) return '💡 Hint: You\'re trying to set a property on something that doesn\'t support it.';
+      return '💡 Hint: You\'re using a value in a way that\'s not compatible with its type.';
+    },
+    RangeError: () => '💡 Hint: A value is not in the expected range. Check array indices or numeric values.',
+    URIError: () => '💡 Hint: There\'s an issue with encoding or decoding a URI. Check your URL formatting.',
+    EvalError: () => '💡 Hint: There\'s an issue with the eval() function usage.',
+  };
+
+  const hintGenerator = hints[errorName];
+  return hintGenerator ? hintGenerator(errorMessage) : '💡 Hint: Review your code for potential issues. Check the error details below.';
+};
+
+// Helper function to extract file name and line number from stack trace
+const parseErrorLocation = (stack: string): { fileName: string; lineNumber: string } => {
+  if (!stack) return { fileName: 'script.js', lineNumber: 'unknown' };
+  
+  // Try to find line number in stack trace
+  const lineMatch = stack.match(/:(\d+):\d+/);
+  const lineNumber = lineMatch ? lineMatch[1] : 'unknown';
+  
+  // For Code Runner, we're always executing script.js
+  return { fileName: 'script.js', lineNumber };
+};
+
 export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: TerminalPopupProps) {
   const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
   const [consoleLogs, setConsoleLogs] = useState<string[]>([]);
@@ -120,7 +161,13 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
               try {
                 ${scriptContent}
               } catch (e) {
-                console.error('Script execution error:', e);
+                console.error('SCRIPT_ERROR:', JSON.stringify({
+                  name: e.name,
+                  message: e.message,
+                  stack: e.stack,
+                  lineNumber: e.lineNumber,
+                  columnNumber: e.columnNumber
+                }));
               }
             `);
 
@@ -132,8 +179,20 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
 
 
           } catch (error) {
-            console.error('Failed to execute script:', error);
-            setConsoleLogs(prev => [...prev, `[ERROR] Script execution failed: ${error instanceof Error ? error.message : String(error)}`]);
+            console.error('SCRIPT_ERROR:', JSON.stringify({
+              name: error instanceof Error ? error.name : 'Error',
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : '',
+              lineNumber: null,
+              columnNumber: null
+            }));
+            setConsoleLogs(prev => [...prev, `[ERROR] SCRIPT_ERROR: ${JSON.stringify({
+              name: error instanceof Error ? error.name : 'Error',
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : '',
+              lineNumber: null,
+              columnNumber: null
+            })}`]);
           } finally {
             // Restore original console methods
             console.log = originalConsole.log;
@@ -183,6 +242,44 @@ export function TerminalPopup({ isOpen, onClose, scriptContent, projectId }: Ter
         } else {
           // Show code execution message and console output
           const filteredLogs = consoleLogs.filter(log => !log.includes('[Terminal]'));
+
+          // Check if there are any errors in the logs
+          const errorLogs = filteredLogs.filter(log => log.includes('SCRIPT_ERROR:'));
+          
+          if (errorLogs.length > 0) {
+            // Parse and display error in user-friendly format
+            const errorLog = errorLogs[0];
+            try {
+              const errorJsonMatch = errorLog.match(/SCRIPT_ERROR:\s*({.*})/);
+              if (errorJsonMatch) {
+                const errorData = JSON.parse(errorJsonMatch[1]);
+                const { name, message, stack } = errorData;
+                const { fileName, lineNumber } = parseErrorLocation(stack);
+                const hint = getErrorHint(name, message);
+                
+                // Format the stack trace for display
+                const stackLines = stack ? stack.split('\n').slice(0, 5) : []; // Show first 5 lines of stack
+                
+                setTerminalOutput([
+                  '❌ Error Detected',
+                  '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                  '',
+                  `🔴 ${name}: ${message}`,
+                  `📄 File: ${fileName} (Line ${lineNumber})`,
+                  '',
+                  hint,
+                  '',
+                  '📚 Full Error Stack:',
+                  '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                  ...stackLines,
+                  '',
+                ]);
+                return;
+              }
+            } catch (parseError) {
+              console.warn('Failed to parse error JSON:', parseError);
+            }
+          }
 
           // If no console output, check if script has any console statements
           const hasConsoleStatements = scriptContent.includes('console.log') ||
