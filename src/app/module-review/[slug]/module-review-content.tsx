@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { RichText } from "@/components/rich-text";
 import CompletionIndicator from "@/components/CompletionIndicator";
@@ -8,11 +8,19 @@ import CompletionIndicator from "@/components/CompletionIndicator";
 interface ModuleReviewContentProps {
   review: any;
   slug: string;
-  moduleSlug?: string;
 }
 
-export default function ModuleReviewContent({ review, slug, moduleSlug }: ModuleReviewContentProps) {
+export default function ModuleReviewContent({ review, slug }: ModuleReviewContentProps) {
   const { user } = useAuth();
+  const [moduleSlug, setModuleSlug] = useState('');
+
+  useEffect(() => {
+    // Get module slug from URL
+    if (typeof window !== 'undefined') {
+      const urlModuleSlug = new URLSearchParams(window.location.search).get('module') || '';
+      setModuleSlug(urlModuleSlug);
+    }
+  }, []);
 
   useEffect(() => {
     // Track this module review as viewed when the component mounts
@@ -63,7 +71,7 @@ export default function ModuleReviewContent({ review, slug, moduleSlug }: Module
         }
       }
     }
-  }, [user, slug, moduleSlug]);
+  }, [user, slug, review.fields.topic, review.fields.title, moduleSlug]);
 
   return (
     <div className="max-w-4xl mx-auto pb-[30vh]">
@@ -71,7 +79,7 @@ export default function ModuleReviewContent({ review, slug, moduleSlug }: Module
         <h1 className="text-3xl font-bold mb-2">{review.fields.topic || review.fields.title}</h1>
         <p className="text-gray-600 mb-2">Software Development Programme · Module Review</p>
 
-        <CompletionIndicator type="moduleReview" slug={slug} module={moduleSlug || ''} />
+        <CompletionIndicator type="moduleReview" slug={slug} module={moduleSlug} />
       </div>
 
       {review.fields.content && (
