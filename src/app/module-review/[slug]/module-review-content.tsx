@@ -12,15 +12,15 @@ interface ModuleReviewContentProps {
 
 export default function ModuleReviewContent({ review, slug }: ModuleReviewContentProps) {
   const { user } = useAuth();
-  const [moduleSlug, setModuleSlug] = useState('');
+  const [moduleSlug, setModuleSlug] = useState(''); // New state for moduleSlug
 
   useEffect(() => {
-    // Get module slug from URL
+    // Get module slug from URL on client side
     if (typeof window !== 'undefined') {
       const urlModuleSlug = new URLSearchParams(window.location.search).get('module') || '';
       setModuleSlug(urlModuleSlug);
     }
-  }, []);
+  }, []); // Run once on client mount
 
   useEffect(() => {
     // Track this module review as viewed when the component mounts
@@ -69,9 +69,8 @@ export default function ModuleReviewContent({ review, slug }: ModuleReviewConten
         } catch (error) {
           console.warn('[ModuleReviewContent] Failed to update viewed items:', error);
         }
-      }
     }
-  }, [user, slug, review.fields.topic, review.fields.title, moduleSlug]);
+  }, [user, slug, review.fields.topic, review.fields.title, moduleSlug]); // Added moduleSlug to dependencies
 
   return (
     <div className="max-w-4xl mx-auto pb-[30vh]">
