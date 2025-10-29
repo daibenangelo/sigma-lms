@@ -58,6 +58,7 @@ async function getModuleProject(projectSlug: string, moduleSlug?: string) {
       preview?: any;
       goal?: any;
       requirements?: any;
+      starterCode?: any;
     }>(
       "moduleProject",
       { limit: 1, "fields.slug": projectSlug, include: 10 }

@@ -128,8 +128,14 @@ export default function ModuleProjectContent({ project, slug }: ModuleProjectCon
               content: [{
                 nodeType: 'paragraph',
                 content: [{
-                  nodeType: 'text',
-                  value: 'https://stackblitz.com/edit/web-platform-example'
+                  nodeType: 'hyperlink',
+                  data: {
+                    uri: 'https://stackblitz.com/edit/react'
+                  },
+                  content: [{
+                    nodeType: 'text',
+                    value: 'Open StackBlitz Editor'
+                  }]
                 }]
               }]
             }}

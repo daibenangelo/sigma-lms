@@ -15,7 +15,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   try {
     // Module quizzes are identified by module slug, not quiz slug
     // The slug parameter here is actually the module slug
-    const moduleQuizData = await fetch(`/api/module-quiz?module=${slug}`, {
+    const baseUrl = process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000';
+
+    const moduleQuizData = await fetch(`${baseUrl}/api/module-quiz?module=${slug}`, {
       cache: 'no-store'
     })
       .then(res => {

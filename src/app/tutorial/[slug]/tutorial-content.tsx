@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { RichText } from "@/components/rich-text";
+import { StackBlitzToggle } from "@/components/stackblitz-toggle";
 
 interface TutorialContentProps {
   tutorial: any;
@@ -116,6 +117,34 @@ export default function TutorialContent({ tutorial, slug }: TutorialContentProps
           <RichText document={sectionSolution} />
         </div>
       )}
+
+      {/* Code Editor Section */}
+      <section className="mb-8">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900">Code Editor</h2>
+        <div className="p-6 rounded-lg border border-gray-200 bg-white">
+          <p className="text-gray-600 mb-4">
+            Use the code editor below to work on your tutorial. You can write, test, and debug your code here.
+          </p>
+          <StackBlitzToggle
+            document={fields.starterCode || {
+              nodeType: 'document',
+              content: [{
+                nodeType: 'paragraph',
+                content: [{
+                  nodeType: 'hyperlink',
+                  data: {
+                    uri: 'https://stackblitz.com/edit/react'
+                  },
+                  content: [{
+                    nodeType: 'text',
+                    value: 'Open StackBlitz Editor'
+                  }]
+                }]
+              }]
+            }}
+          />
+        </div>
+      </section>
     </div>
   );
 }

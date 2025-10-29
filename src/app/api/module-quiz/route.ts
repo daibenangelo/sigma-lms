@@ -29,7 +29,7 @@ async function getModuleQuiz(moduleSlug: string) {
       courses?: any[];
     }>(
       "module",
-      { limit: 1, "fields.slug": moduleSlug, include: 15 }
+      { limit: 1, "fields.slug": moduleSlug, include: 10 }
     );
 
     if (modules.length === 0) {
