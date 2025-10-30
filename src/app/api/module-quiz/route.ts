@@ -179,7 +179,7 @@ async function getModuleQuiz(moduleSlug: string) {
         // Calculate how many questions to take from each quiz
         // Aim for approximately equal distribution within 90-100 total
         const totalQuestions = allQuestions.length;
-        let targetTotal = Math.min(TARGET_MAX_QUESTIONS, totalQuestions);
+        const targetTotal = Math.min(TARGET_MAX_QUESTIONS, totalQuestions);
 
         // If we have more than the max, try to get as close to 100 as possible
         // while maintaining equal distribution
