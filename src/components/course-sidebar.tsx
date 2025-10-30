@@ -278,7 +278,7 @@ export function CourseSidebar() {
             title: currentModuleData.moduleReview.fields.title || 'Module Review',
             slug: currentModuleData.moduleReview.fields.slug,
             type: 'module-review',
-            moduleSlug: effectiveModule
+            moduleSlug: effectiveModule || currentModuleData.slug
           });
         }
 
@@ -286,9 +286,9 @@ export function CourseSidebar() {
         if (currentModuleData.moduleQuiz?.length > 0) {
           moduleContent.push({
             title: 'Module Quiz',
-            slug: effectiveModule,
+            slug: effectiveModule || currentModuleData.slug,
             type: 'module-quiz',
-            moduleSlug: effectiveModule
+            moduleSlug: effectiveModule || currentModuleData.slug
           });
         }
 
@@ -297,24 +297,24 @@ export function CourseSidebar() {
           currentModuleData.moduleProject.forEach((project: any, idx: number) => {
             moduleContent.push({
               title: project.fields?.title || `Module Project ${idx + 1}`,
-              slug: project.fields?.slug || `${effectiveModule}-project-${idx}`,
+              slug: project.fields?.slug || `${effectiveModule || currentModuleData.slug}-project-${idx}`,
               type: 'module-project',
-              moduleSlug: effectiveModule
+              moduleSlug: effectiveModule || currentModuleData.slug
             });
           });
         } else {
           // Add placeholder module project if none exist
           moduleContent.push({
             title: 'Module Project (Coming Soon)',
-            slug: `${effectiveModule}-project-placeholder`,
+            slug: `${effectiveModule || currentModuleData.slug}-project-placeholder`,
             type: 'module-project',
-            moduleSlug: effectiveModule
+            moduleSlug: effectiveModule || currentModuleData.slug
           });
         }
 
         setContent(moduleContent);
         setCourseName(`${currentModuleData.title} Module`);
-        setEffectiveModule(effectiveModule); // Update the effective module for progress tracking
+        setEffectiveModule(effectiveModule || currentModuleData.slug); // Update the effective module for progress tracking
       } else {
         // If we couldn't find the module, show a fallback
         setContent([]);
