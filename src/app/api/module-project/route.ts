@@ -37,8 +37,9 @@ async function getModuleProject(projectSlug: string, moduleSlug?: string) {
           return mpSlug === projectSlug;
         });
 
-        if (linkedProject) {
-          console.log(`[module-project API] Found linked project: ${linkedProject.fields?.title}`);
+        if (linkedProject && typeof linkedProject === 'object' && 'fields' in linkedProject) {
+          const projectData = linkedProject as any; // Type assertion for Contentful data
+          console.log(`[module-project API] Found linked project: ${projectData.fields?.title}`);
           return {
             project: linkedProject,
             moduleTitle: module.fields?.title || 'Module'
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const result = await getModuleProject(projectSlug, moduleSlug);
+    const result = await getModuleProject(projectSlug, moduleSlug || undefined);
 
     if (result.error) {
       return NextResponse.json(result, { status: 404 });
